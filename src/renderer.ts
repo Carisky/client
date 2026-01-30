@@ -198,8 +198,21 @@ function renderPills(values: string[], emptyText = '-') {
     .join('')}${rest > 0 ? `<span class="pill">+${rest}</span>` : ''}</div>`;
 }
 
+const ROW_DETAIL_KEYS: ReadonlyArray<string> = [
+  'id',
+  'rowNumber',
+  'nr_sad',
+  'numer_pozycji',
+  'rodzaj_sad',
+  'typ_sad_u',
+  'data_sad_p_54',
+  'data_mrn',
+  'stan',
+  'numer_mrn',
+];
+
 function renderRowKv(row: Record<string, string | null>): string {
-  const keys: string[] = ['id', 'rowNumber', ...RAPORT_COLUMNS.map((c) => c.field)];
+  const keys: ReadonlyArray<string> = ROW_DETAIL_KEYS;
   const parts: string[] = [];
 
   for (const k of keys) {
@@ -235,7 +248,6 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
 
     const nrSad = uniqValues(rows, 'nr_sad');
     const dataMrn = uniqValues(rows, 'data_mrn');
-    const zglaszajacy = uniqValues(rows, 'zglaszajacy');
 
     const rowsHtml =
       rows.length === 0
@@ -245,7 +257,7 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
               const rowNumber = row.rowNumber ? String(row.rowNumber) : '-';
               const nr = row.nr_sad ? String(row.nr_sad) : '-';
               const dt = row.data_mrn ? String(row.data_mrn) : '-';
-              const zg = row.zglaszajacy ? String(row.zglaszajacy) : '-';
+              const st = row.stan ? String(row.stan) : '-';
 
               return `
                 <details class="row-accordion">
@@ -254,7 +266,7 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
                       <div class="muted" title="rowNumber">${escapeHtml(rowNumber)}</div>
                       <div class="muted" title="nr_sad">${escapeHtml(nr)}</div>
                       <div class="muted" title="data_mrn">${escapeHtml(dt)}</div>
-                      <div class="muted" title="zglaszajacy">${escapeHtml(zg)}</div>
+                      <div class="muted" title="stan">${escapeHtml(st)}</div>
                     </div>
                   </summary>
                   ${renderRowKv(row)}
@@ -264,12 +276,10 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
             .join('');
 
     body.innerHTML = `
-      <div class="muted">nr_sad</div>
+      <div class="muted">Nr SAD</div>
       ${renderPills(nrSad)}
-      <div class="muted">data_mrn</div>
+      <div class="muted">Data MRN</div>
       ${renderPills(dataMrn)}
-      <div class="muted">zglaszajacy</div>
-      ${renderPills(zglaszajacy)}
       ${rowsHtml}
     `;
     detailsEl.dataset.loaded = '1';
