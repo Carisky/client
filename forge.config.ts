@@ -13,13 +13,10 @@ import { rendererConfig } from './webpack.renderer.config';
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
-    asarUnpack: [
-      '**/*.node',
-      '**/.prisma/**',
-      '**/node_modules/.prisma/**',
-      '**/node_modules/@prisma/**',
-    ],
+    asar: {
+      unpack:
+        '{**/*.node,**/.prisma/**,**/node_modules/.prisma/**,**/node_modules/@prisma/**}',
+    },
   },
   rebuildConfig: {},
   makers: [
