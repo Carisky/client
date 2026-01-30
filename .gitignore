@@ -90,3 +90,7 @@ typings/
 
 # Electron-Forge
 out/
+
+# Local DB
+db/*.sqlite
+db/*.db

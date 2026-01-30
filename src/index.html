@@ -2,11 +2,91 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Hello World!</title>
-
+    <title>Raport SAD</title>
   </head>
   <body>
-    <h1>💖 Hello World!</h1>
-    <p>Welcome to your Electron application.</p>
+    <div id="app">
+      <header class="app-header">
+        <div class="app-title">Raport SAD</div>
+        <div id="meta" class="app-meta">Brak zaimportowanych danych</div>
+      </header>
+
+      <nav class="tabs" role="tablist" aria-label="Nawigacja">
+        <button id="tab-btn-import" class="tab active" role="tab" aria-selected="true">
+          Import
+        </button>
+        <button id="tab-btn-preview" class="tab" role="tab" aria-selected="false">
+          Podgląd
+        </button>
+        <button id="tab-btn-settings" class="tab" role="tab" aria-selected="false">
+          Ustawienia
+        </button>
+      </nav>
+
+      <main class="content">
+        <section id="tab-import" class="tab-panel">
+          <div class="card">
+            <h2>Import danych</h2>
+            <p class="muted">
+              Wybierz plik Excel i zaimportuj dane do wbudowanej bazy SQLite.
+            </p>
+            <button id="btn-import" class="primary">Importuj dane z pliku Excel…</button>
+            <div class="progress-wrap" aria-label="Postęp importu">
+              <progress id="import-progress" class="progress" value="0" max="100"></progress>
+              <div id="import-progress-text" class="progress-text"></div>
+            </div>
+            <div id="import-status" class="status" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section id="tab-preview" class="tab-panel hidden">
+          <div class="toolbar">
+            <div class="pagination">
+              <button id="btn-prev" class="ghost">Poprzednia</button>
+              <div id="page-info" class="page-info">Strona 1</div>
+              <button id="btn-next" class="ghost">Następna</button>
+            </div>
+
+            <div class="actions">
+              <select id="page-size" class="select" aria-label="Liczba wierszy na stronę">
+                <option value="250" selected>250 / strona</option>
+                <option value="100">100 / strona</option>
+                <option value="50">50 / strona</option>
+              </select>
+              <button id="btn-refresh" class="ghost">Odśwież</button>
+            </div>
+          </div>
+
+          <div class="table-wrap" role="region" aria-label="Podgląd danych">
+            <table id="data-table">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div id="preview-status" class="status" aria-live="polite"></div>
+        </section>
+
+        <section id="tab-settings" class="tab-panel hidden">
+          <div class="card">
+            <h2>Ustawienia</h2>
+            <div class="settings-row">
+              <div class="settings-label">Plik bazy danych</div>
+              <div id="db-path" class="settings-value">—</div>
+              <button id="btn-show-db" class="ghost">Pokaż w folderze</button>
+            </div>
+            <hr class="divider" />
+            <div class="settings-row">
+              <div class="settings-label">Dane</div>
+              <div class="settings-value muted">
+                Usuwa wszystkie zaimportowane wiersze z bazy.
+              </div>
+              <button id="btn-clear" class="danger">Wyczyść dane</button>
+            </div>
+            <div id="settings-status" class="status" aria-live="polite"></div>
+          </div>
+        </section>
+      </main>
+    </div>
   </body>
 </html>

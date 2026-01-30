@@ -1,8 +1,269 @@
+:root {
+  color-scheme: light;
+  --bg: #0b1220;
+  --panel: #111b2e;
+  --panel-2: #0f172a;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --border: rgba(148, 163, 184, 0.2);
+  --primary: #4f46e5;
+  --primary-2: #4338ca;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
     sans-serif;
-  margin: auto;
-  max-width: 38rem;
-  padding: 2rem;
+  background: radial-gradient(1000px 600px at 10% 10%, #172554 0%, var(--bg) 55%);
+  color: var(--text);
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(17, 27, 46, 0.95), rgba(17, 27, 46, 0.7));
+  backdrop-filter: blur(10px);
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.app-title {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.app-meta {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  max-width: 65%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.tab {
+  border: 1px solid var(--border);
+  background: rgba(17, 27, 46, 0.55);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tab.active {
+  border-color: rgba(79, 70, 229, 0.55);
+  background: rgba(79, 70, 229, 0.2);
+}
+
+.content {
+  flex: 1;
+  padding: 14px 14px 18px;
+  overflow: hidden;
+}
+
+.tab-panel {
+  height: 100%;
+}
+
+.hidden {
+  display: none;
+}
+
+.card {
+  max-width: 720px;
+  margin: 0 auto;
+  background: rgba(17, 27, 46, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.muted {
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+button {
+  font: inherit;
+}
+
+.primary {
+  margin-top: 12px;
+  border: 1px solid rgba(79, 70, 229, 0.4);
+  background: linear-gradient(180deg, var(--primary), var(--primary-2));
+  color: white;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ghost {
+  border: 1px solid var(--border);
+  background: rgba(17, 27, 46, 0.35);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.danger {
+  border: 1px solid rgba(244, 63, 94, 0.45);
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.select {
+  border: 1px solid var(--border);
+  background: rgba(17, 27, 46, 0.35);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+.status {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 18px;
+}
+
+.progress-wrap {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.progress {
+  width: 100%;
+  height: 14px;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 16px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 6px 12px;
+}
+
+.pagination,
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.page-info {
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 140px;
+  text-align: center;
+}
+
+.table-wrap {
+  height: calc(100% - 58px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: auto;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 180px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.settings-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settings-value {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(17, 27, 46, 0.92);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+tbody td {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  padding: 6px 10px;
+  vertical-align: top;
+  white-space: nowrap;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+tbody tr:hover td {
+  background: rgba(79, 70, 229, 0.06);
 }
