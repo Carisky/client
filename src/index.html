@@ -18,6 +18,9 @@
         <button id="tab-btn-preview" class="tab" role="tab" aria-selected="false">
           Podgląd
         </button>
+        <button id="tab-btn-dashboard" class="tab" role="tab" aria-selected="false">
+          Duplikaty MRN
+        </button>
         <button id="tab-btn-settings" class="tab" role="tab" aria-selected="false">
           Ustawienia
         </button>
@@ -65,6 +68,19 @@
           </div>
 
           <div id="preview-status" class="status" aria-live="polite"></div>
+        </section>
+
+        <section id="tab-dashboard" class="tab-panel hidden">
+          <div class="toolbar">
+            <div class="actions">
+              <button id="btn-mrn-rebuild" class="primary">Skanuj i zapisz do mrn_batch</button>
+              <button id="btn-mrn-refresh" class="ghost">OdЕ›wieЕј</button>
+            </div>
+            <div id="mrn-meta" class="page-info"></div>
+          </div>
+
+          <div id="mrn-groups" class="accordion-wrap" role="region" aria-label="Duplikaty MRN"></div>
+          <div id="dashboard-status" class="status" aria-live="polite"></div>
         </section>
 
         <section id="tab-settings" class="tab-panel hidden">

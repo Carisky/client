@@ -239,3 +239,19 @@ model RaportRow {
   @@map("raport_rows")
   @@index([id])
 }
+
+model MrnBatchRow {
+  id          Int      @id @default(autoincrement())
+  createdAt   DateTime @default(now())
+
+  numer_mrn   String
+  raportRowId Int?
+  rowNumber   Int?
+  nr_sad      String?
+  data_mrn    String?
+  zglaszajacy String?
+
+  @@map("mrn_batch")
+  @@index([numer_mrn])
+  @@index([raportRowId])
+}

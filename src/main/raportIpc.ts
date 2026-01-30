@@ -1,5 +1,15 @@
 import { dialog, ipcMain, shell } from 'electron';
-import { clearRaportData, getDbInfo, getRaportMeta, getRaportPage, importRaportFromXlsx } from './raportDb';
+import {
+  clearRaportData,
+  getDbInfo,
+  getMrnBatchGroups,
+  getMrnBatchMeta,
+  getMrnBatchRows,
+  getRaportMeta,
+  getRaportPage,
+  importRaportFromXlsx,
+  rebuildMrnBatch,
+} from './raportDb';
 
 export function registerRaportIpc(): void {
   ipcMain.handle('raport:import', async (event) => {
@@ -35,4 +45,9 @@ export function registerRaportIpc(): void {
     shell.showItemInFolder(info.filePath);
     return true;
   });
+
+  ipcMain.handle('mrnBatch:rebuild', async () => rebuildMrnBatch());
+  ipcMain.handle('mrnBatch:meta', async () => getMrnBatchMeta());
+  ipcMain.handle('mrnBatch:groups', async (_evt, args?: { limit?: number }) => getMrnBatchGroups({ limit: args?.limit }));
+  ipcMain.handle('mrnBatch:rows', async (_evt, args: { numerMrn: string }) => getMrnBatchRows(args?.numerMrn));
 }

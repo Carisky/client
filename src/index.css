@@ -267,3 +267,135 @@ tbody td {
 tbody tr:hover td {
   background: rgba(79, 70, 229, 0.06);
 }
+
+.accordion-wrap {
+  height: calc(100% - 58px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: auto;
+  background: rgba(15, 23, 42, 0.35);
+  padding: 8px;
+}
+
+details.accordion {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(17, 27, 46, 0.45);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+details.accordion > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+details.accordion > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.accordion[open] > summary {
+  border-bottom: 1px solid var(--border);
+  background: rgba(79, 70, 229, 0.06);
+}
+
+.mrn-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  border: 1px solid rgba(79, 70, 229, 0.45);
+  background: rgba(79, 70, 229, 0.15);
+  color: var(--text);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.accordion-body {
+  padding: 10px 12px 12px;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+
+.pill {
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.25);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+details.row-accordion {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.25);
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+details.row-accordion > summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+details.row-accordion > summary::-webkit-details-marker {
+  display: none;
+}
+
+.row-summary {
+  display: grid;
+  grid-template-columns: 70px 1fr 140px 1fr;
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+}
+
+.row-summary .muted {
+  margin: 0;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv-grid {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 6px 10px;
+  padding: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.kv-key {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.kv-val {
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -92,8 +92,25 @@ async function ensureSchema(client: PrismaClient): Promise<void> {
     );
   `;
 
+  const createMrnBatch = `
+    CREATE TABLE IF NOT EXISTS "mrn_batch" (
+      "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "numer_mrn" TEXT NOT NULL,
+      "raportRowId" INTEGER NULL,
+      "rowNumber" INTEGER NULL,
+      "nr_sad" TEXT NULL,
+      "data_mrn" TEXT NULL,
+      "zglaszajacy" TEXT NULL
+    );
+  `;
+
   await client.$executeRawUnsafe(createMeta);
   await client.$executeRawUnsafe(createRows);
+  await client.$executeRawUnsafe(createMrnBatch);
+
+  await client.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "mrn_batch_numer_mrn_idx" ON "mrn_batch" ("numer_mrn");');
+  await client.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "mrn_batch_raportRowId_idx" ON "mrn_batch" ("raportRowId");');
 
   await client.raportMeta.upsert({
     where: { id: 1 },
@@ -229,6 +246,8 @@ export async function clearRaportData(): Promise<void> {
     // sqlite_sequence may not exist yet
   }
 
+  await clearMrnBatch();
+
   await client.raportMeta.update({
     where: { id: 1 },
     data: {
@@ -300,4 +319,146 @@ export async function disposePrisma(): Promise<void> {
   if (!prisma) return;
   await prisma.$disconnect();
   prisma = null;
+}
+
+async function clearMrnBatch(): Promise<void> {
+  const client = await getPrisma();
+
+  await client.$executeRawUnsafe('DELETE FROM "mrn_batch";');
+  try {
+    await client.$executeRawUnsafe('DELETE FROM sqlite_sequence WHERE name = "mrn_batch";');
+  } catch {
+    // sqlite_sequence may not exist yet
+  }
+}
+
+export async function rebuildMrnBatch(): Promise<{ rowsInserted: number; groups: number; scannedAt: string | null }> {
+  const client = await getPrisma();
+
+  await clearMrnBatch();
+
+  const inserted = (await client.$executeRawUnsafe(`
+    INSERT INTO "mrn_batch" ("numer_mrn", "raportRowId", "rowNumber", "nr_sad", "data_mrn", "zglaszajacy")
+    SELECT
+      TRIM("numer_mrn") as "numer_mrn",
+      "id" as "raportRowId",
+      "rowNumber",
+      "nr_sad",
+      "data_mrn",
+      "zglaszajacy"
+    FROM "raport_rows"
+    WHERE "numer_mrn" IS NOT NULL
+      AND TRIM("numer_mrn") <> ''
+      AND TRIM("numer_mrn") IN (
+        SELECT TRIM("numer_mrn") as "numer_mrn"
+        FROM "raport_rows"
+        WHERE "numer_mrn" IS NOT NULL AND TRIM("numer_mrn") <> ''
+        GROUP BY TRIM("numer_mrn")
+        HAVING COUNT(*) > 1
+      );
+  `)) as unknown as number;
+
+  const groupsRows = (await client.$queryRawUnsafe(`
+    SELECT COUNT(*) as "cnt"
+    FROM (
+      SELECT "numer_mrn"
+      FROM "mrn_batch"
+      GROUP BY "numer_mrn"
+    );
+  `)) as Array<{ cnt: number }>;
+
+  const scannedAtRows = (await client.$queryRawUnsafe(`
+    SELECT MAX("createdAt") as "maxCreatedAt"
+    FROM "mrn_batch";
+  `)) as Array<{ maxCreatedAt: string | null }>;
+
+  return {
+    rowsInserted: Number.isFinite(inserted) ? inserted : 0,
+    groups: groupsRows?.[0]?.cnt ?? 0,
+    scannedAt: scannedAtRows?.[0]?.maxCreatedAt ?? null,
+  };
+}
+
+export async function getMrnBatchMeta(): Promise<{ scannedAt: string | null; groups: number; rows: number }> {
+  const client = await getPrisma();
+
+  const rows = await client.mrnBatchRow.count();
+  const groupsRows = (await client.$queryRawUnsafe(`
+    SELECT COUNT(*) as "cnt"
+    FROM (
+      SELECT "numer_mrn"
+      FROM "mrn_batch"
+      GROUP BY "numer_mrn"
+    );
+  `)) as Array<{ cnt: number }>;
+
+  const scannedAtRows = (await client.$queryRawUnsafe(`
+    SELECT MAX("createdAt") as "maxCreatedAt"
+    FROM "mrn_batch";
+  `)) as Array<{ maxCreatedAt: string | null }>;
+
+  return {
+    scannedAt: scannedAtRows?.[0]?.maxCreatedAt ?? null,
+    groups: groupsRows?.[0]?.cnt ?? 0,
+    rows,
+  };
+}
+
+export async function getMrnBatchGroups(params?: {
+  limit?: number;
+}): Promise<Array<{ numer_mrn: string; count: number }>> {
+  const client = await getPrisma();
+  const limit = Math.max(1, Math.min(2000, params?.limit ?? 500));
+
+  const rows = (await client.$queryRawUnsafe(
+    `
+      SELECT "numer_mrn" as "numer_mrn", COUNT(*) as "count"
+      FROM "mrn_batch"
+      GROUP BY "numer_mrn"
+      ORDER BY "count" DESC, "numer_mrn" ASC
+      LIMIT ?;
+    `,
+    limit,
+  )) as Array<{ numer_mrn: string; count: number }>;
+
+  return rows.map((r) => ({
+    numer_mrn: String(r.numer_mrn),
+    count: Number(r.count) || 0,
+  }));
+}
+
+export async function getMrnBatchRows(numerMrn: string): Promise<{
+  numer_mrn: string;
+  rows: Array<Record<string, string | null>>;
+}> {
+  const client = await getPrisma();
+  const numer_mrn = String(numerMrn ?? '').trim();
+  if (!numer_mrn) return { numer_mrn: '', rows: [] };
+
+  const batch = await client.mrnBatchRow.findMany({
+    where: { numer_mrn },
+    select: { raportRowId: true },
+    orderBy: { raportRowId: 'asc' },
+  });
+  const ids = batch.map((b) => b.raportRowId).filter((v): v is number => typeof v === 'number');
+  if (ids.length === 0) return { numer_mrn, rows: [] };
+
+  const rows = await client.raportRow.findMany({
+    where: { id: { in: ids } },
+    orderBy: { id: 'asc' },
+  });
+
+  const normalized = rows.map((r) => {
+    const rAny = r as unknown as Record<string, unknown>;
+    const out: Record<string, string | null> = {
+      id: String(r.id),
+      rowNumber: r.rowNumber == null ? null : String(r.rowNumber),
+    };
+    for (const col of RAPORT_COLUMNS) {
+      out[col.field] = (rAny[col.field] as string | null | undefined) ?? null;
+    }
+    return out;
+  });
+
+  return { numer_mrn, rows: normalized };
 }

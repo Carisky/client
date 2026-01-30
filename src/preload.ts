@@ -31,6 +31,22 @@ export type RaportPage = {
   rows: Array<Record<string, string | null>>;
 };
 
+export type MrnBatchMeta = {
+  scannedAt: string | null;
+  groups: number;
+  rows: number;
+};
+
+export type MrnBatchGroup = {
+  numer_mrn: string;
+  count: number;
+};
+
+export type MrnBatchRows = {
+  numer_mrn: string;
+  rows: Array<Record<string, string | null>>;
+};
+
 contextBridge.exposeInMainWorld('api', {
   onImportProgress: (handler: (p: ImportProgress) => void): (() => void) => {
     const listener = (_event: unknown, payload: ImportProgress) => handler(payload);
@@ -44,4 +60,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('raport:page', { page, pageSize }),
   getDbInfo: (): Promise<DbInfo> => ipcRenderer.invoke('raport:dbInfo'),
   showDbInFolder: (): Promise<boolean> => ipcRenderer.invoke('raport:showDbInFolder'),
+
+  rebuildMrnBatch: (): Promise<{ rowsInserted: number; groups: number; scannedAt: string | null }> =>
+    ipcRenderer.invoke('mrnBatch:rebuild'),
+  getMrnBatchMeta: (): Promise<MrnBatchMeta> => ipcRenderer.invoke('mrnBatch:meta'),
+  getMrnBatchGroups: (limit?: number): Promise<MrnBatchGroup[]> => ipcRenderer.invoke('mrnBatch:groups', { limit }),
+  getMrnBatchRows: (numerMrn: string): Promise<MrnBatchRows> => ipcRenderer.invoke('mrnBatch:rows', { numerMrn }),
 });

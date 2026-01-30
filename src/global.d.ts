@@ -1,4 +1,13 @@
-import type { DbInfo, ImportProgress, ImportResult, RaportMeta, RaportPage } from './preload';
+import type {
+  DbInfo,
+  ImportProgress,
+  ImportResult,
+  MrnBatchGroup,
+  MrnBatchMeta,
+  MrnBatchRows,
+  RaportMeta,
+  RaportPage,
+} from './preload';
 
 declare global {
   interface Window {
@@ -10,6 +19,11 @@ declare global {
       getRaportPage: (page: number, pageSize: number) => Promise<RaportPage>;
       getDbInfo: () => Promise<DbInfo>;
       showDbInFolder: () => Promise<boolean>;
+
+      rebuildMrnBatch: () => Promise<{ rowsInserted: number; groups: number; scannedAt: string | null }>;
+      getMrnBatchMeta: () => Promise<MrnBatchMeta>;
+      getMrnBatchGroups: (limit?: number) => Promise<MrnBatchGroup[]>;
+      getMrnBatchRows: (numerMrn: string) => Promise<MrnBatchRows>;
     };
   }
 }
