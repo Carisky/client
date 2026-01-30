@@ -21,6 +21,9 @@
         <button id="tab-btn-dashboard" class="tab" role="tab" aria-selected="false">
           Duplikaty MRN
         </button>
+        <button id="tab-btn-validation" class="tab" role="tab" aria-selected="false">
+          Walidacja
+        </button>
         <button id="tab-btn-settings" class="tab" role="tab" aria-selected="false">
           Ustawienia
         </button>
@@ -81,6 +84,20 @@
 
           <div id="mrn-groups" class="accordion-wrap" role="region" aria-label="Duplikaty MRN"></div>
           <div id="dashboard-status" class="status" aria-live="polite"></div>
+        </section>
+
+        <section id="tab-validation" class="tab-panel hidden">
+          <div class="toolbar">
+            <div class="actions">
+              <label class="muted" for="validation-month" style="margin-right: 6px;">Miesiąc</label>
+              <input id="validation-month" class="select" type="month" />
+              <button id="btn-validation-refresh" class="ghost">Odśwież</button>
+            </div>
+            <div id="validation-meta" class="page-info"></div>
+          </div>
+
+          <div id="validation-groups" class="accordion-wrap" role="region" aria-label="Walidacja"></div>
+          <div id="validation-status" class="status" aria-live="polite"></div>
         </section>
 
         <section id="tab-settings" class="tab-panel hidden">

@@ -47,6 +47,27 @@ export type MrnBatchRows = {
   rows: Array<Record<string, string | null>>;
 };
 
+export type ValidationGroupKey = {
+  odbiorca: string;
+  kraj_wysylki: string;
+  warunki_dostawy: string;
+  waluta: string;
+  kurs_waluty: string;
+  transport_na_granicy_rodzaj: string;
+  kod_towaru: string;
+};
+
+export type ValidationGroups = {
+  range: { start: string; end: string };
+  groups: Array<{ key: ValidationGroupKey; count: number }>;
+};
+
+export type ValidationItems = {
+  range: { start: string; end: string };
+  key: ValidationGroupKey;
+  items: Array<{ data_mrn: string | null; odbiorca: string | null; numer_mrn: string | null; coef: number | null }>;
+};
+
 contextBridge.exposeInMainWorld('api', {
   onImportProgress: (handler: (p: ImportProgress) => void): (() => void) => {
     const listener = (_event: unknown, payload: ImportProgress) => handler(payload);
@@ -66,4 +87,9 @@ contextBridge.exposeInMainWorld('api', {
   getMrnBatchMeta: (): Promise<MrnBatchMeta> => ipcRenderer.invoke('mrnBatch:meta'),
   getMrnBatchGroups: (limit?: number): Promise<MrnBatchGroup[]> => ipcRenderer.invoke('mrnBatch:groups', { limit }),
   getMrnBatchRows: (numerMrn: string): Promise<MrnBatchRows> => ipcRenderer.invoke('mrnBatch:rows', { numerMrn }),
+
+  getValidationDefaultMonth: (): Promise<{ month: string | null }> => ipcRenderer.invoke('validation:defaultMonth'),
+  getValidationGroups: (month: string): Promise<ValidationGroups> => ipcRenderer.invoke('validation:groups', { month }),
+  getValidationItems: (month: string, key: ValidationGroupKey): Promise<ValidationItems> =>
+    ipcRenderer.invoke('validation:items', { month, key }),
 });

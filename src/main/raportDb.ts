@@ -462,3 +462,198 @@ export async function getMrnBatchRows(numerMrn: string): Promise<{
 
   return { numer_mrn, rows: normalized };
 }
+
+function toYmdRange(month: string): { start: string; end: string } {
+  const m = String(month ?? '').trim();
+  const match = /^(\d{4})-(\d{2})$/.exec(m);
+  if (!match) {
+    // fallback: current month
+    const now = new Date();
+    const y = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const start = `${y}-${mm}-01`;
+    const end = `${y}-${mm}-${String(new Date(y, now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+    return { start, end };
+  }
+  const y = Number(match[1]);
+  const mon = Number(match[2]);
+  const lastDay = new Date(y, mon, 0).getDate();
+  return { start: `${match[1]}-${match[2]}-01`, end: `${match[1]}-${match[2]}-${String(lastDay).padStart(2, '0')}` };
+}
+
+function parseLocaleNumber(value: string | null | undefined): number | null {
+  if (value == null) return null;
+  let s = String(value).trim();
+  if (!s) return null;
+
+  s = s.replace(/\u00a0/g, ' ').replace(/\s+/g, '');
+
+  const hasComma = s.includes(',');
+  const hasDot = s.includes('.');
+  if (hasComma && hasDot) {
+    const lastComma = s.lastIndexOf(',');
+    const lastDot = s.lastIndexOf('.');
+    const dec = lastComma > lastDot ? ',' : '.';
+    const thou = dec === ',' ? '.' : ',';
+    s = s.split(thou).join('');
+    if (dec === ',') s = s.replace(/,/g, '.');
+  } else if (hasComma && !hasDot) {
+    s = s.replace(/,/g, '.');
+  }
+
+  s = s.replace(/[^0-9.+-]/g, '');
+  const n = Number.parseFloat(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+export type ValidationGroupKey = {
+  odbiorca: string;
+  kraj_wysylki: string;
+  warunki_dostawy: string;
+  waluta: string;
+  kurs_waluty: string;
+  transport_na_granicy_rodzaj: string;
+  kod_towaru: string;
+};
+
+export async function getValidationDefaultMonth(): Promise<{ month: string | null }> {
+  const client = await getPrisma();
+  const rows = (await client.$queryRawUnsafe(`
+    SELECT MAX(SUBSTR(TRIM("data_mrn"), 1, 7)) as "month"
+    FROM "raport_rows"
+    WHERE "data_mrn" IS NOT NULL AND TRIM("data_mrn") <> '';
+  `)) as Array<{ month: string | null }>;
+  const month = rows?.[0]?.month ?? null;
+  return { month };
+}
+
+async function queryValidationRepresentativeRows(client: PrismaClient, range: { start: string; end: string }) {
+  return (await client.$queryRawUnsafe(
+    `
+      WITH rep AS (
+        SELECT
+          "id",
+          "data_mrn",
+          "numer_mrn",
+          "nr_sad",
+          "odbiorca",
+          "kraj_wysylki",
+          "warunki_dostawy",
+          "waluta",
+          "kurs_waluty",
+          "transport_na_granicy_rodzaj",
+          "kod_towaru",
+          "oplaty_celne_razem",
+          "masa_netto",
+          ROW_NUMBER() OVER (
+            PARTITION BY TRIM(COALESCE("numer_mrn", '')), TRIM(COALESCE("nr_sad", ''))
+            ORDER BY
+              CASE
+                WHEN "wartosc_pozycji" IS NOT NULL AND TRIM("wartosc_pozycji") <> '' THEN 0
+                WHEN "wartosc_faktury" IS NOT NULL AND TRIM("wartosc_faktury") <> '' THEN 1
+                ELSE 2
+              END,
+              "id" ASC
+          ) as "rn"
+        FROM "raport_rows"
+        WHERE "data_mrn" IS NOT NULL
+          AND TRIM("data_mrn") <> ''
+          AND TRIM("data_mrn") BETWEEN ? AND ?
+          AND "numer_mrn" IS NOT NULL AND TRIM("numer_mrn") <> ''
+          AND "nr_sad" IS NOT NULL AND TRIM("nr_sad") <> ''
+      )
+      SELECT *
+      FROM rep
+      WHERE "rn" = 1;
+    `,
+    range.start,
+    range.end,
+  )) as Array<{
+    id: number;
+    data_mrn: string | null;
+    numer_mrn: string | null;
+    nr_sad: string | null;
+    odbiorca: string | null;
+    kraj_wysylki: string | null;
+    warunki_dostawy: string | null;
+    waluta: string | null;
+    kurs_waluty: string | null;
+    transport_na_granicy_rodzaj: string | null;
+    kod_towaru: string | null;
+    oplaty_celne_razem: string | null;
+    masa_netto: string | null;
+    rn: number;
+  }>;
+}
+
+export async function getValidationGroups(params: { month: string }): Promise<{
+  range: { start: string; end: string };
+  groups: Array<{ key: ValidationGroupKey; count: number }>;
+}> {
+  const client = await getPrisma();
+  const range = toYmdRange(params.month);
+
+  const rows = await queryValidationRepresentativeRows(client, range);
+
+  const map = new Map<string, { key: ValidationGroupKey; count: number }>();
+  for (const r of rows) {
+    const key: ValidationGroupKey = {
+      odbiorca: (r.odbiorca ?? '').trim(),
+      kraj_wysylki: (r.kraj_wysylki ?? '').trim(),
+      warunki_dostawy: (r.warunki_dostawy ?? '').trim(),
+      waluta: (r.waluta ?? '').trim(),
+      kurs_waluty: (r.kurs_waluty ?? '').trim(),
+      transport_na_granicy_rodzaj: (r.transport_na_granicy_rodzaj ?? '').trim(),
+      kod_towaru: (r.kod_towaru ?? '').trim(),
+    };
+    const k = JSON.stringify(key);
+    const existing = map.get(k);
+    if (existing) existing.count += 1;
+    else map.set(k, { key, count: 1 });
+  }
+
+  const groups = Array.from(map.values()).sort((a, b) => b.count - a.count);
+  return { range, groups };
+}
+
+export async function getValidationItems(params: { month: string; key: ValidationGroupKey }): Promise<{
+  range: { start: string; end: string };
+  key: ValidationGroupKey;
+  items: Array<{ data_mrn: string | null; odbiorca: string | null; numer_mrn: string | null; coef: number | null }>;
+}> {
+  const client = await getPrisma();
+  const range = toYmdRange(params.month);
+  const rows = await queryValidationRepresentativeRows(client, range);
+
+  const want = params.key;
+  const items = rows
+    .filter((r) => {
+      const key: ValidationGroupKey = {
+        odbiorca: (r.odbiorca ?? '').trim(),
+        kraj_wysylki: (r.kraj_wysylki ?? '').trim(),
+        warunki_dostawy: (r.warunki_dostawy ?? '').trim(),
+        waluta: (r.waluta ?? '').trim(),
+        kurs_waluty: (r.kurs_waluty ?? '').trim(),
+        transport_na_granicy_rodzaj: (r.transport_na_granicy_rodzaj ?? '').trim(),
+        kod_towaru: (r.kod_towaru ?? '').trim(),
+      };
+      return (
+        key.odbiorca === want.odbiorca &&
+        key.kraj_wysylki === want.kraj_wysylki &&
+        key.warunki_dostawy === want.warunki_dostawy &&
+        key.waluta === want.waluta &&
+        key.kurs_waluty === want.kurs_waluty &&
+        key.transport_na_granicy_rodzaj === want.transport_na_granicy_rodzaj &&
+        key.kod_towaru === want.kod_towaru
+      );
+    })
+    .map((r) => {
+      const fees = parseLocaleNumber(r.oplaty_celne_razem);
+      const mass = parseLocaleNumber(r.masa_netto);
+      const coef = fees != null && mass != null && mass !== 0 ? fees / mass : null;
+      return { data_mrn: r.data_mrn ?? null, odbiorca: r.odbiorca ?? null, numer_mrn: r.numer_mrn ?? null, coef };
+    })
+    .sort((a, b) => String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) || String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')));
+
+  return { range, key: params.key, items };
+}

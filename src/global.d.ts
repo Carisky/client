@@ -7,6 +7,9 @@ import type {
   MrnBatchRows,
   RaportMeta,
   RaportPage,
+  ValidationGroupKey,
+  ValidationGroups,
+  ValidationItems,
 } from './preload';
 
 declare global {
@@ -24,6 +27,10 @@ declare global {
       getMrnBatchMeta: () => Promise<MrnBatchMeta>;
       getMrnBatchGroups: (limit?: number) => Promise<MrnBatchGroup[]>;
       getMrnBatchRows: (numerMrn: string) => Promise<MrnBatchRows>;
+
+      getValidationDefaultMonth: () => Promise<{ month: string | null }>;
+      getValidationGroups: (month: string) => Promise<ValidationGroups>;
+      getValidationItems: (month: string, key: ValidationGroupKey) => Promise<ValidationItems>;
     };
   }
 }

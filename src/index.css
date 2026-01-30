@@ -399,3 +399,27 @@ details.row-accordion > summary::-webkit-details-marker {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.mini-table th,
+.mini-table td {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.mini-table th {
+  color: var(--muted);
+  font-weight: 600;
+  background: rgba(17, 27, 46, 0.35);
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}

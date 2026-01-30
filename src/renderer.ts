@@ -1,17 +1,19 @@
 import './index.css';
 import { RAPORT_COLUMNS } from './raportColumns';
 
-type TabName = 'import' | 'preview' | 'dashboard' | 'settings';
+type TabName = 'import' | 'preview' | 'dashboard' | 'validation' | 'settings';
 
 const els = {
   tabImportBtn: document.getElementById('tab-btn-import') as HTMLButtonElement,
   tabPreviewBtn: document.getElementById('tab-btn-preview') as HTMLButtonElement,
   tabDashboardBtn: document.getElementById('tab-btn-dashboard') as HTMLButtonElement,
+  tabValidationBtn: document.getElementById('tab-btn-validation') as HTMLButtonElement,
   tabSettingsBtn: document.getElementById('tab-btn-settings') as HTMLButtonElement,
 
   tabImport: document.getElementById('tab-import') as HTMLElement,
   tabPreview: document.getElementById('tab-preview') as HTMLElement,
   tabDashboard: document.getElementById('tab-dashboard') as HTMLElement,
+  tabValidation: document.getElementById('tab-validation') as HTMLElement,
   tabSettings: document.getElementById('tab-settings') as HTMLElement,
 
   importBtn: document.getElementById('btn-import') as HTMLButtonElement,
@@ -36,6 +38,12 @@ const els = {
   btnMrnRefresh: document.getElementById('btn-mrn-refresh') as HTMLButtonElement,
   mrnMeta: document.getElementById('mrn-meta') as HTMLElement,
   mrnGroups: document.getElementById('mrn-groups') as HTMLElement,
+
+  validationMonth: document.getElementById('validation-month') as HTMLInputElement,
+  btnValidationRefresh: document.getElementById('btn-validation-refresh') as HTMLButtonElement,
+  validationMeta: document.getElementById('validation-meta') as HTMLElement,
+  validationGroups: document.getElementById('validation-groups') as HTMLElement,
+  validationStatus: document.getElementById('validation-status') as HTMLElement,
 
   dbPath: document.getElementById('db-path') as HTMLElement,
   btnShowDb: document.getElementById('btn-show-db') as HTMLButtonElement,
@@ -69,20 +77,24 @@ function setTab(name: TabName) {
   els.tabImportBtn.classList.toggle('active', name === 'import');
   els.tabPreviewBtn.classList.toggle('active', name === 'preview');
   els.tabDashboardBtn.classList.toggle('active', name === 'dashboard');
+  els.tabValidationBtn.classList.toggle('active', name === 'validation');
   els.tabSettingsBtn.classList.toggle('active', name === 'settings');
 
   els.tabImportBtn.setAttribute('aria-selected', String(name === 'import'));
   els.tabPreviewBtn.setAttribute('aria-selected', String(name === 'preview'));
   els.tabDashboardBtn.setAttribute('aria-selected', String(name === 'dashboard'));
+  els.tabValidationBtn.setAttribute('aria-selected', String(name === 'validation'));
   els.tabSettingsBtn.setAttribute('aria-selected', String(name === 'settings'));
 
   els.tabImport.classList.toggle('hidden', name !== 'import');
   els.tabPreview.classList.toggle('hidden', name !== 'preview');
   els.tabDashboard.classList.toggle('hidden', name !== 'dashboard');
+  els.tabValidation.classList.toggle('hidden', name !== 'validation');
   els.tabSettings.classList.toggle('hidden', name !== 'settings');
 
   if (name === 'preview') void refreshPreview();
   if (name === 'dashboard') void refreshDashboard();
+  if (name === 'validation') void refreshValidation();
   if (name === 'settings') void refreshSettings();
 }
 
@@ -336,6 +348,178 @@ async function refreshDashboard() {
   }
 }
 
+type ValidationGroupKey = {
+  odbiorca: string;
+  kraj_wysylki: string;
+  warunki_dostawy: string;
+  waluta: string;
+  kurs_waluty: string;
+  transport_na_granicy_rodzaj: string;
+  kod_towaru: string;
+};
+
+function encodeKey(key: unknown): string {
+  try {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(key))));
+  } catch {
+    return '';
+  }
+}
+
+function decodeKey<T>(key: string): T | null {
+  try {
+    const s = decodeURIComponent(escape(atob(key)));
+    return JSON.parse(s) as T;
+  } catch {
+    return null;
+  }
+}
+
+function prettyKeyLine(label: string, value: string): string {
+  const v = value && value.trim().length > 0 ? value : '-';
+  return `<div class="kv-key">${escapeHtml(label)}</div><div class="kv-val">${escapeHtml(v)}</div>`;
+}
+
+async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
+  const keyEncoded = detailsEl.dataset.key ?? '';
+  const month = els.validationMonth.value;
+  if (!keyEncoded || !month) return;
+  if (detailsEl.dataset.loaded === '1') return;
+  if (detailsEl.dataset.loading === '1') return;
+
+  const key = decodeKey<ValidationGroupKey>(keyEncoded);
+  if (!key) return;
+
+  const body = detailsEl.querySelector('.accordion-body') as HTMLElement | null;
+  if (!body) return;
+
+  detailsEl.dataset.loading = '1';
+  body.innerHTML = `<div class="muted">Loading...</div>`;
+
+  try {
+    const res = await window.api.getValidationItems(month, key);
+    const items = res.items ?? [];
+
+    const keyGrid = `
+      <div class="kv-grid">
+        ${prettyKeyLine('Odbiorca', res.key.odbiorca)}
+        ${prettyKeyLine('Kraj wysylki', res.key.kraj_wysylki)}
+        ${prettyKeyLine('Warunki dostawy', res.key.warunki_dostawy)}
+        ${prettyKeyLine('Waluta', res.key.waluta)}
+        ${prettyKeyLine('Kurs waluty', res.key.kurs_waluty)}
+        ${prettyKeyLine('Transport (rodzaj)', res.key.transport_na_granicy_rodzaj)}
+        ${prettyKeyLine('Kod towaru', res.key.kod_towaru)}
+      </div>
+    `;
+
+    const rows =
+      items.length === 0
+        ? `<div class="muted">No items.</div>`
+        : `
+          <table class="mini-table">
+            <thead>
+              <tr>
+                <th>Data MRN</th>
+                <th>Odbiorca</th>
+                <th>Numer MRN</th>
+                <th>Wspolczynnik</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items
+                .map((it) => {
+                  const coef = it.coef == null ? '-' : Number(it.coef).toFixed(6);
+                  return `<tr>
+                    <td class="mono">${escapeHtml(it.data_mrn ?? '-')}</td>
+                    <td title="${escapeHtml(it.odbiorca ?? '')}">${escapeHtml(it.odbiorca ?? '-')}</td>
+                    <td class="mono">${escapeHtml(it.numer_mrn ?? '-')}</td>
+                    <td class="mono">${escapeHtml(coef)}</td>
+                  </tr>`;
+                })
+                .join('')}
+            </tbody>
+          </table>
+        `;
+
+    body.innerHTML = `${keyGrid}${rows}`;
+    detailsEl.dataset.loaded = '1';
+  } catch (e: unknown) {
+    body.innerHTML = `<div class="muted">Error: ${escapeHtml(errorMessage(e))}</div>`;
+  } finally {
+    detailsEl.dataset.loading = '0';
+  }
+}
+
+async function ensureValidationMonthDefault() {
+  if (els.validationMonth.value) return;
+  try {
+    const res = await window.api.getValidationDefaultMonth();
+    if (res.month) els.validationMonth.value = res.month;
+  } catch {
+    // ignore
+  }
+}
+
+async function refreshValidation() {
+  setStatus(els.validationStatus, '');
+  await ensureValidationMonthDefault();
+  const month = els.validationMonth.value;
+  if (!month) {
+    setStatus(els.validationStatus, 'Select month.');
+    return;
+  }
+
+  setStatus(els.validationStatus, 'Loading...');
+  els.validationGroups.innerHTML = '';
+  els.validationMeta.textContent = '';
+
+  try {
+    const res = await window.api.getValidationGroups(month);
+    els.validationMeta.textContent = `Range: ${res.range.start} -> ${res.range.end} | Groups: ${res.groups.length}`;
+
+    if (res.groups.length === 0) {
+      els.validationGroups.innerHTML = `<div class="muted" style="padding:10px 12px;">No groups in this month.</div>`;
+      setStatus(els.validationStatus, '');
+      return;
+    }
+
+    els.validationGroups.innerHTML = res.groups
+      .slice(0, 1000)
+      .map((g) => {
+        const titleParts = [
+          g.key.odbiorca || '-',
+          g.key.kod_towaru ? `kod:${g.key.kod_towaru}` : '',
+          g.key.waluta ? `wal:${g.key.waluta}` : '',
+        ].filter(Boolean);
+        const title = titleParts.join(' | ');
+        const keyEncoded = encodeKey(g.key);
+        return `
+          <details class="accordion" data-key="${escapeHtml(keyEncoded)}">
+            <summary>
+              <span class="mrn-code" title="${escapeHtml(title)}">${escapeHtml(title || '-')}</span>
+              <span class="badge">${g.count}</span>
+            </summary>
+            <div class="accordion-body">
+              <div class="muted">Open to load details.</div>
+            </div>
+          </details>
+        `;
+      })
+      .join('');
+
+    for (const el of Array.from(els.validationGroups.querySelectorAll('details.accordion'))) {
+      const d = el as HTMLDetailsElement;
+      d.addEventListener('toggle', () => {
+        if (d.open) void loadValidationGroupDetails(d);
+      });
+    }
+
+    setStatus(els.validationStatus, '');
+  } catch (e: unknown) {
+    setStatus(els.validationStatus, `Error: ${errorMessage(e)}`);
+  }
+}
+
 async function importRaport() {
   els.importBtn.disabled = true;
   setStatus(els.importStatus, 'Importowanie…');
@@ -391,6 +575,7 @@ async function clearData() {
 els.tabImportBtn.addEventListener('click', () => setTab('import'));
 els.tabPreviewBtn.addEventListener('click', () => setTab('preview'));
 els.tabDashboardBtn.addEventListener('click', () => setTab('dashboard'));
+els.tabValidationBtn.addEventListener('click', () => setTab('validation'));
 els.tabSettingsBtn.addEventListener('click', () => setTab('settings'));
 
 els.importBtn.addEventListener('click', () => void importRaport());
@@ -428,5 +613,8 @@ els.btnMrnRebuild.addEventListener('click', async () => {
     els.btnMrnRebuild.disabled = false;
   }
 });
+
+els.btnValidationRefresh.addEventListener('click', () => void refreshValidation());
+els.validationMonth.addEventListener('change', () => void refreshValidation());
 
 void refreshMeta();
