@@ -65,7 +65,14 @@ export type ValidationGroups = {
 export type ValidationItems = {
   range: { start: string; end: string };
   key: ValidationGroupKey;
-  items: Array<{ data_mrn: string | null; odbiorca: string | null; numer_mrn: string | null; coef: number | null }>;
+  items: Array<{
+    data_mrn: string | null;
+    odbiorca: string | null;
+    numer_mrn: string | null;
+    coef: number | null;
+    outlier: boolean;
+    outlierSide: 'low' | 'high' | null;
+  }>;
 };
 
 contextBridge.exposeInMainWorld('api', {

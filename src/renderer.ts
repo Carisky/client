@@ -429,11 +429,14 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
               ${items
                 .map((it) => {
                   const coef = it.coef == null ? '-' : Number(it.coef).toFixed(6);
-                  return `<tr>
+                  const rowClass = it.outlier ? ' class="outlier"' : '';
+                  const arrow =
+                    it.outlierSide === 'low' ? '<span class="coef-arrow low" title="Below lower IQR bound">↓</span>' : it.outlierSide === 'high' ? '<span class="coef-arrow high" title="Above upper IQR bound">↑</span>' : '';
+                  return `<tr${rowClass}>
                     <td class="mono">${escapeHtml(it.data_mrn ?? '-')}</td>
                     <td title="${escapeHtml(it.odbiorca ?? '')}">${escapeHtml(it.odbiorca ?? '-')}</td>
                     <td class="mono">${escapeHtml(it.numer_mrn ?? '-')}</td>
-                    <td class="mono">${escapeHtml(coef)}</td>
+                    <td class="mono coef-cell">${arrow}${escapeHtml(coef)}</td>
                   </tr>`;
                 })
                 .join('')}

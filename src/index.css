@@ -420,6 +420,36 @@ details.row-accordion > summary::-webkit-details-marker {
   background: rgba(17, 27, 46, 0.35);
 }
 
+.mini-table tr.outlier td {
+  background: rgba(249, 115, 22, 0.14);
+  border-bottom-color: rgba(249, 115, 22, 0.18);
+}
+
+.mini-table tr.outlier:hover td {
+  background: rgba(249, 115, 22, 0.18);
+}
+
+.coef-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.coef-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(249, 115, 22, 0.28);
+  background: rgba(249, 115, 22, 0.12);
+  color: rgba(249, 115, 22, 0.95);
+  font-size: 12px;
+  line-height: 1;
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }

@@ -506,6 +506,19 @@ function parseLocaleNumber(value: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function quantileSorted(valuesAsc: number[], p: number): number {
+  if (valuesAsc.length === 0) return Number.NaN;
+  if (valuesAsc.length === 1) return valuesAsc[0];
+
+  const pp = Math.min(1, Math.max(0, p));
+  const idx = (valuesAsc.length - 1) * pp;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return valuesAsc[lo];
+  const w = idx - lo;
+  return valuesAsc[lo] * (1 - w) + valuesAsc[hi] * w;
+}
+
 export type ValidationGroupKey = {
   odbiorca: string;
   kraj_wysylki: string;
@@ -619,7 +632,14 @@ export async function getValidationGroups(params: { month: string }): Promise<{
 export async function getValidationItems(params: { month: string; key: ValidationGroupKey }): Promise<{
   range: { start: string; end: string };
   key: ValidationGroupKey;
-  items: Array<{ data_mrn: string | null; odbiorca: string | null; numer_mrn: string | null; coef: number | null }>;
+  items: Array<{
+    data_mrn: string | null;
+    odbiorca: string | null;
+    numer_mrn: string | null;
+    coef: number | null;
+    outlier: boolean;
+    outlierSide: 'low' | 'high' | null;
+  }>;
 }> {
   const client = await getPrisma();
   const range = toYmdRange(params.month);
@@ -651,9 +671,63 @@ export async function getValidationItems(params: { month: string; key: Validatio
       const fees = parseLocaleNumber(r.oplaty_celne_razem);
       const mass = parseLocaleNumber(r.masa_netto);
       const coef = fees != null && mass != null && mass !== 0 ? fees / mass : null;
-      return { data_mrn: r.data_mrn ?? null, odbiorca: r.odbiorca ?? null, numer_mrn: r.numer_mrn ?? null, coef };
-    })
-    .sort((a, b) => String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) || String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')));
+      return {
+        data_mrn: r.data_mrn ?? null,
+        odbiorca: r.odbiorca ?? null,
+        numer_mrn: r.numer_mrn ?? null,
+        coef,
+        outlier: false,
+        outlierSide: null as 'low' | 'high' | null,
+      };
+    });
+
+  // Outliers per day (IQR). If a day has <2 numeric values, it's ignored.
+  const byDate = new Map<string, number[]>();
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (!it.data_mrn) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    const arr = byDate.get(it.data_mrn);
+    if (arr) arr.push(i);
+    else byDate.set(it.data_mrn, [i]);
+  }
+
+  for (const indices of byDate.values()) {
+    if (indices.length < 2) continue;
+    const valuesAsc = indices
+      .map((i) => items[i].coef as number)
+      .filter((v) => Number.isFinite(v))
+      .sort((a, b) => a - b);
+    if (valuesAsc.length < 2) continue;
+
+    const q1 = quantileSorted(valuesAsc, 0.25);
+    const q3 = quantileSorted(valuesAsc, 0.75);
+    const iqr = q3 - q1;
+    if (!Number.isFinite(iqr)) continue;
+    const lower = q1 - 1.5 * iqr;
+    const upper = q3 + 1.5 * iqr;
+
+    for (const i of indices) {
+      const v = items[i].coef;
+      if (v == null || !Number.isFinite(v)) continue;
+      if (v < lower) {
+        items[i].outlier = true;
+        items[i].outlierSide = 'low';
+      } else if (v > upper) {
+        items[i].outlier = true;
+        items[i].outlierSide = 'high';
+      } else {
+        items[i].outlier = false;
+        items[i].outlierSide = null;
+      }
+    }
+  }
+
+  items.sort(
+    (a, b) =>
+      String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+      String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+  );
 
   return { range, key: params.key, items };
 }
