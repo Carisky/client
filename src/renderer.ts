@@ -66,6 +66,8 @@ function setBusy(isBusy: boolean) {
   document.body.classList.toggle('is-busy', busyCount > 0);
 }
 
+let lastUpdateCheck: Awaited<ReturnType<typeof window.api.checkForUpdates>> | null = null;
+
 function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVersion: string) {
   if (document.getElementById('update-backdrop')) return;
   document.body.classList.add('update-required');
@@ -117,6 +119,7 @@ function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVe
 async function checkForUpdatesAndBlock() {
   try {
     const res = await window.api.checkForUpdates();
+    lastUpdateCheck = res;
     if (!res.supported) return;
     if (!res.updateAvailable) return;
     if (!res.latestVersion || !res.downloadUrl) return;
@@ -248,6 +251,11 @@ async function refreshSettings() {
     els.dbPath.textContent = '—';
     setStatus(els.settingsStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
+    const err = lastUpdateCheck?.error?.trim();
+    if (!els.settingsStatus.textContent && err) {
+      const u = lastUpdateCheck?.manifestUrl ? ` (${lastUpdateCheck.manifestUrl})` : '';
+      setStatus(els.settingsStatus, `Updates: ${err}${u}`);
+    }
     setBusy(false);
   }
 }
