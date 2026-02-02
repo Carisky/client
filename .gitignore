@@ -91,6 +91,11 @@ typings/
 # Electron-Forge
 out/
 
+# Release artifacts (too big for GitHub)
+releases/**
+!releases/**/
+!releases/**/*.json
+
 # Local DB
 db/*.sqlite
 db/*.db

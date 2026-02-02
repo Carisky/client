@@ -12,6 +12,10 @@ function execInherit(cmd, opts = {}) {
   childProcess.execSync(cmd, { stdio: 'inherit', ...opts });
 }
 
+function execFileInherit(file, args, opts = {}) {
+  childProcess.execFileSync(file, args, { stdio: 'inherit', ...opts });
+}
+
 function parseGithubRepo(remoteUrl) {
   const s = String(remoteUrl || '').trim();
   // git@github.com:owner/repo.git
@@ -21,6 +25,82 @@ function parseGithubRepo(remoteUrl) {
   m = /^https?:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/.exec(s);
   if (m) return { owner: m[1], repo: m[2] };
   return null;
+}
+
+function getGithubToken() {
+  const t = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '').trim();
+  return t || null;
+}
+
+async function ghApi(url, { method = 'GET', token, headers = {}, body } = {}) {
+  const res = await fetch(url, {
+    method,
+    headers: {
+      accept: 'application/vnd.github+json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      'user-agent': 'make-remote',
+      ...headers,
+    },
+    body,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`GitHub API ${method} ${url} -> HTTP ${res.status} ${text}`.slice(0, 1200));
+  }
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return res.json();
+  return res.text();
+}
+
+async function getOrCreateRelease({ owner, repo, tag, token }) {
+  // Try get by tag
+  try {
+    const rel = await ghApi(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${encodeURIComponent(tag)}`, {
+      token,
+    });
+    return rel;
+  } catch {
+    // ignore
+  }
+
+  const rel = await ghApi(`https://api.github.com/repos/${owner}/${repo}/releases`, {
+    method: 'POST',
+    token,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      tag_name: tag,
+      name: tag,
+      draft: false,
+      prerelease: false,
+      generate_release_notes: false,
+    }),
+  });
+  return rel;
+}
+
+async function uploadReleaseAsset({ uploadUrl, filePath, token }) {
+  const name = path.basename(filePath);
+  const url = String(uploadUrl).replace('{?name,label}', `?name=${encodeURIComponent(name)}`);
+  const stat = fs.statSync(filePath);
+  const stream = fs.createReadStream(filePath);
+
+  console.log(`Uploading asset (${Math.round(stat.size / (1024 * 1024))} MB): ${name}`);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      accept: 'application/vnd.github+json',
+      authorization: `Bearer ${token}`,
+      'user-agent': 'make-remote',
+      'content-type': 'application/octet-stream',
+      'content-length': String(stat.size),
+    },
+    body: stream,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Upload failed -> HTTP ${res.status} ${text}`.slice(0, 1200));
+  }
+  return res.json();
 }
 
 function walk(dir) {
@@ -53,7 +133,7 @@ function writeJson(filePath, value) {
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2) + '\n', 'utf8');
 }
 
-function main() {
+async function main() {
   const root = path.resolve(__dirname, '..');
   process.chdir(root);
 
@@ -72,8 +152,17 @@ function main() {
     throw new Error('Only GitHub origin URLs are supported for auto manifest URL. Set UPDATE_MANIFEST_URL in resources/update.json manually.');
   }
 
+  const token = getGithubToken();
+  if (!token) {
+    throw new Error('Missing GitHub token. Set env var GITHUB_TOKEN (or GH_TOKEN) with "repo" scope to upload release assets.');
+  }
+
   console.log(`Building v${version}...`);
-  execInherit('npm run make', { cwd: root });
+  const forgeJs = path.join(root, 'node_modules', '@electron-forge', 'cli', 'dist', 'electron-forge.js');
+  if (!fs.existsSync(forgeJs)) {
+    throw new Error('Electron Forge not found. Run: npm install');
+  }
+  execFileInherit(process.execPath, [forgeJs, 'make'], { cwd: root });
 
   const outDir = path.join(root, 'out', 'make');
   if (!fs.existsSync(outDir)) throw new Error(`Build output not found: ${outDir}`);
@@ -82,33 +171,27 @@ function main() {
   const exe = files.find((p) => /\.exe$/i.test(p) && /setup/i.test(path.basename(p)));
   if (!exe) throw new Error('Could not find Setup.exe in out/make');
 
-  const releaseDir = path.join(root, 'releases', `v${version}`);
-  ensureDir(releaseDir);
-
-  const exeName = path.basename(exe);
-  const destExe = path.join(releaseDir, exeName);
-  fs.copyFileSync(exe, destExe);
-
-  const relPath = path.posix.join('client', 'releases', `v${version}`, exeName);
   const rawBase = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${branch}`;
-  const downloadUrl = `${rawBase}/${relPath}`;
   const manifestUrl = `${rawBase}/client/releases/latest.json`;
+  const tag = `v${version}`;
+  const exeName = path.basename(exe);
+  const downloadUrl = `https://github.com/${gh.owner}/${gh.repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(exeName)}`;
 
   const manifest = {
     version,
     channel: branch,
     publishedAt: new Date().toISOString(),
     downloadUrl,
-    file: relPath,
-    sha256: sha256(destExe),
-    size: fs.statSync(destExe).size,
+    file: exeName,
+    sha256: sha256(exe),
+    size: fs.statSync(exe).size,
   };
 
   writeJson(path.join(root, 'releases', `v${version}`, 'manifest.json'), manifest);
   writeJson(path.join(root, 'releases', 'latest.json'), manifest);
   writeJson(path.join(root, 'resources', 'update.json'), { manifestUrl });
 
-  console.log(`Publishing artifacts to branch "${branch}"...`);
+  console.log(`Publishing manifests to branch "${branch}"...`);
   execInherit('git add -A releases resources/update.json', { cwd: root });
 
   const status = exec('git status --porcelain', { cwd: root });
@@ -118,17 +201,18 @@ function main() {
     execInherit(`git commit -m "release: v${version}"`, { cwd: root });
   }
 
-  try {
-    execInherit(`git tag -f v${version}`, { cwd: root });
-  } catch {
-    // ignore
-  }
-
+  execInherit(`git tag -f ${tag}`, { cwd: root });
   execInherit('git push origin HEAD', { cwd: root });
   execInherit('git push origin --tags -f', { cwd: root });
+
+  console.log(`Creating GitHub release ${tag}...`);
+  const rel = await getOrCreateRelease({ owner: gh.owner, repo: gh.repo, tag, token });
+  await uploadReleaseAsset({ uploadUrl: rel.upload_url, filePath: exe, token });
 
   console.log(`Done. Manifest: ${manifestUrl}`);
 }
 
-main();
-
+main().catch((e) => {
+  console.error(e instanceof Error ? e.message : e);
+  process.exit(1);
+});
