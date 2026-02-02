@@ -251,10 +251,13 @@ async function refreshSettings() {
     els.dbPath.textContent = '—';
     setStatus(els.settingsStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
-    const err = lastUpdateCheck?.error?.trim();
-    if (!els.settingsStatus.textContent && err) {
-      const u = lastUpdateCheck?.manifestUrl ? ` (${lastUpdateCheck.manifestUrl})` : '';
-      setStatus(els.settingsStatus, `Updates: ${err}${u}`);
+    if (!els.settingsStatus.textContent && lastUpdateCheck) {
+      const u = lastUpdateCheck;
+      const manifest = u.manifestUrl ? ` (${u.manifestUrl})` : '';
+      const base = `Updates: current=${u.currentVersion} latest=${u.latestVersion ?? '—'} available=${u.updateAvailable}`;
+      if (!u.supported) setStatus(els.settingsStatus, `${base} disabled${manifest}`);
+      else if (u.error) setStatus(els.settingsStatus, `${base} error=${u.error}${manifest}`);
+      else setStatus(els.settingsStatus, `${base}${manifest}`);
     }
     setBusy(false);
   }

@@ -53,6 +53,9 @@ function resolveUpdateConfigPath(): string | null {
   // Packaged: extraResource copied under resources/resources/
   candidates.push(path.resolve(process.resourcesPath, 'resources', 'update.json'));
 
+  // Packaged (fallback): extraResource copied as a file (or custom layout)
+  candidates.push(path.resolve(process.resourcesPath, 'update.json'));
+
   for (const p of candidates) {
     try {
       if (fs.existsSync(p)) return p;
@@ -63,16 +66,23 @@ function resolveUpdateConfigPath(): string | null {
   return null;
 }
 
+function normalizeManifestUrl(url: string): string {
+  const u = String(url ?? '').trim();
+  if (!u) return u;
+  // Historical bug: script used ".../<branch>/client/releases/latest.json" while repo uses "/releases/latest.json".
+  return u.replace('/client/releases/', '/releases/');
+}
+
 function resolveManifestUrl(): string | null {
   const fromEnv = (process.env.UPDATE_MANIFEST_URL ?? '').trim();
-  if (fromEnv) return fromEnv;
+  if (fromEnv) return normalizeManifestUrl(fromEnv);
 
   const cfgPath = resolveUpdateConfigPath();
   if (!cfgPath) return null;
   const cfg = tryReadJsonFile(cfgPath);
   if (!cfg || typeof cfg !== 'object') return null;
   const url = (cfg as { manifestUrl?: unknown }).manifestUrl;
-  return typeof url === 'string' && url.trim() ? url.trim() : null;
+  return typeof url === 'string' && url.trim() ? normalizeManifestUrl(url) : null;
 }
 
 async function fetchJson(url: string, timeoutMs: number): Promise<unknown> {
@@ -121,7 +131,10 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
   }
 
   try {
-    const payload = await fetchJson(manifestUrl, 4500);
+    const u = new URL(manifestUrl);
+    // Avoid CDN caching issues (GitHub raw is heavily cached).
+    u.searchParams.set('_ts', String(Date.now()));
+    const payload = await fetchJson(u.toString(), 4500);
     const { version: latestVersion, downloadUrl } = extractLatestInfo(payload);
     if (!latestVersion || !downloadUrl) {
       return {
@@ -158,4 +171,3 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
     };
   }
 }
-
