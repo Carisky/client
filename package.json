@@ -9,6 +9,7 @@
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
+    "make:remote": "node scripts/make-remote.js",
     "publish": "electron-forge publish",
     "lint": "eslint --no-error-on-unmatched-pattern --ext .ts,.tsx \"src/**/*.ts\" \"src/**/*.tsx\"",
     "raport:schema": "node scripts/generate-raport-schema.js",

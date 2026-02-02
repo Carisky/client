@@ -7,6 +7,7 @@ import type {
   MrnBatchRows,
   RaportMeta,
   RaportPage,
+  UpdateCheckResult,
   ValidationDashboard,
   ValidationDayFilter,
   ValidationDayItems,
@@ -37,6 +38,11 @@ declare global {
       getValidationDashboard: (month: string) => Promise<ValidationDashboard>;
       getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter) => Promise<ValidationDayItems>;
       setValidationManualVerified: (rowId: number, verified: boolean) => Promise<{ ok: true }>;
+
+      getAppVersion: () => Promise<{ version: string }>;
+      checkForUpdates: () => Promise<UpdateCheckResult>;
+      openExternal: (url: string) => Promise<boolean>;
+      quitApp: () => Promise<boolean>;
     };
   }
 }

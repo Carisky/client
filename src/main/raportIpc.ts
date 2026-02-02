@@ -1,4 +1,4 @@
-import { dialog, ipcMain, shell } from 'electron';
+import { app, dialog, ipcMain, shell } from 'electron';
 import {
   clearRaportData,
   getDbInfo,
@@ -16,6 +16,7 @@ import {
   rebuildMrnBatch,
   setValidationManualVerified,
 } from './raportDb';
+import { checkForUpdates } from './appUpdate';
 
 export function registerRaportIpc(): void {
   ipcMain.handle('raport:import', async (event) => {
@@ -76,4 +77,17 @@ export function registerRaportIpc(): void {
   ipcMain.handle('validation:setManualVerified', async (_evt, args: { rowId: number; verified: boolean }) =>
     setValidationManualVerified({ rowId: args?.rowId, verified: Boolean(args?.verified) }),
   );
+
+  ipcMain.handle('app:version', async () => ({ version: app.getVersion() }));
+  ipcMain.handle('updates:check', async () => checkForUpdates());
+  ipcMain.handle('updates:open', async (_evt, args: { url: string }) => {
+    const url = String(args?.url ?? '').trim();
+    if (!url) return false;
+    await shell.openExternal(url);
+    return true;
+  });
+  ipcMain.handle('app:quit', async () => {
+    app.quit();
+    return true;
+  });
 }

@@ -66,6 +66,66 @@ function setBusy(isBusy: boolean) {
   document.body.classList.toggle('is-busy', busyCount > 0);
 }
 
+function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVersion: string) {
+  if (document.getElementById('update-backdrop')) return;
+  document.body.classList.add('update-required');
+
+  const el = document.createElement('div');
+  el.id = 'update-backdrop';
+  el.className = 'update-backdrop';
+  el.innerHTML = `
+    <div class="update-card" role="dialog" aria-modal="true" aria-label="Wymagana aktualizacja">
+      <div class="update-card-header">
+        <div>
+          <div class="update-title">Wymagana aktualizacja</div>
+          <div class="update-sub">Twoja wersja: ${escapeHtml(currentVersion)} • Dostępna: ${escapeHtml(latestVersion)}</div>
+        </div>
+        <div class="update-badge">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin:0">
+            <path d="M12 3v10m0 0l4-4m-4 4l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          v${escapeHtml(latestVersion)}
+        </div>
+      </div>
+      <div class="update-card-body">
+        <div class="muted">Aby kontynuować, zainstaluj najnowszą wersję aplikacji.</div>
+        <div class="update-actions">
+          <button id="btn-update-now" class="btn btn-primary">
+            Zaktualizuj do wersji ${escapeHtml(latestVersion)}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(el);
+
+  const btn = el.querySelector('#btn-update-now') as HTMLButtonElement | null;
+  btn?.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      await window.api.openExternal(downloadUrl);
+    } finally {
+      void window.api.quitApp();
+    }
+  });
+
+  const stop = (e: Event) => e.preventDefault();
+  window.addEventListener('keydown', stop, { capture: true });
+}
+
+async function checkForUpdatesAndBlock() {
+  try {
+    const res = await window.api.checkForUpdates();
+    if (!res.supported) return;
+    if (!res.updateAvailable) return;
+    if (!res.latestVersion || !res.downloadUrl) return;
+    renderUpdateBlock(res.latestVersion, res.downloadUrl, res.currentVersion);
+  } catch {
+    // ignore
+  }
+}
+
 function setStatus(el: HTMLElement, text: string) {
   el.textContent = text;
 }
@@ -939,3 +999,4 @@ els.btnValidationRefresh.addEventListener('click', () => void refreshValidation(
 els.validationMonth.addEventListener('change', () => void refreshValidation());
 
 void refreshMeta();
+void checkForUpdatesAndBlock();

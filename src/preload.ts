@@ -103,6 +103,16 @@ export type ValidationDayItems = {
   }>;
 };
 
+export type UpdateCheckResult = {
+  supported: boolean;
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  downloadUrl: string | null;
+  manifestUrl: string | null;
+  error: string | null;
+};
+
 contextBridge.exposeInMainWorld('api', {
   onImportProgress: (handler: (p: ImportProgress) => void): (() => void) => {
     const listener = (_event: unknown, payload: ImportProgress) => handler(payload);
@@ -132,4 +142,9 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('validation:dayItems', { month, date, filter }),
   setValidationManualVerified: (rowId: number, verified: boolean): Promise<{ ok: true }> =>
     ipcRenderer.invoke('validation:setManualVerified', { rowId, verified }),
+
+  getAppVersion: (): Promise<{ version: string }> => ipcRenderer.invoke('app:version'),
+  checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
+  openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('updates:open', { url }),
+  quitApp: (): Promise<boolean> => ipcRenderer.invoke('app:quit'),
 });
