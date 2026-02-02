@@ -1,58 +1,82 @@
-import 'bootstrap/dist/css/bootstrap.min.css';
-import './index.css';
-import { RAPORT_COLUMNS } from './raportColumns';
+import "bootstrap/dist/css/bootstrap.min.css";
+import "./index.css";
+import { RAPORT_COLUMNS } from "./raportColumns";
 
-type TabName = 'import' | 'preview' | 'dashboard' | 'validation' | 'settings';
+type TabName = "import" | "preview" | "dashboard" | "validation" | "settings";
 
 const els = {
-  tabImportBtn: document.getElementById('tab-btn-import') as HTMLButtonElement,
-  tabPreviewBtn: document.getElementById('tab-btn-preview') as HTMLButtonElement,
-  tabDashboardBtn: document.getElementById('tab-btn-dashboard') as HTMLButtonElement,
-  tabValidationBtn: document.getElementById('tab-btn-validation') as HTMLButtonElement,
-  tabSettingsBtn: document.getElementById('tab-btn-settings') as HTMLButtonElement,
+  tabImportBtn: document.getElementById("tab-btn-import") as HTMLButtonElement,
+  tabPreviewBtn: document.getElementById(
+    "tab-btn-preview",
+  ) as HTMLButtonElement,
+  tabDashboardBtn: document.getElementById(
+    "tab-btn-dashboard",
+  ) as HTMLButtonElement,
+  tabValidationBtn: document.getElementById(
+    "tab-btn-validation",
+  ) as HTMLButtonElement,
+  tabSettingsBtn: document.getElementById(
+    "tab-btn-settings",
+  ) as HTMLButtonElement,
 
-  tabImport: document.getElementById('tab-import') as HTMLElement,
-  tabPreview: document.getElementById('tab-preview') as HTMLElement,
-  tabDashboard: document.getElementById('tab-dashboard') as HTMLElement,
-  tabValidation: document.getElementById('tab-validation') as HTMLElement,
-  tabSettings: document.getElementById('tab-settings') as HTMLElement,
+  tabImport: document.getElementById("tab-import") as HTMLElement,
+  tabPreview: document.getElementById("tab-preview") as HTMLElement,
+  tabDashboard: document.getElementById("tab-dashboard") as HTMLElement,
+  tabValidation: document.getElementById("tab-validation") as HTMLElement,
+  tabSettings: document.getElementById("tab-settings") as HTMLElement,
 
-  importBtn: document.getElementById('btn-import') as HTMLButtonElement,
-  importProgress: document.getElementById('import-progress') as HTMLProgressElement,
-  importProgressText: document.getElementById('import-progress-text') as HTMLElement,
-  importStatus: document.getElementById('import-status') as HTMLElement,
-  previewStatus: document.getElementById('preview-status') as HTMLElement,
-  dashboardStatus: document.getElementById('dashboard-status') as HTMLElement,
-  settingsStatus: document.getElementById('settings-status') as HTMLElement,
+  importBtn: document.getElementById("btn-import") as HTMLButtonElement,
+  importProgress: document.getElementById(
+    "import-progress",
+  ) as HTMLProgressElement,
+  importProgressText: document.getElementById(
+    "import-progress-text",
+  ) as HTMLElement,
+  importStatus: document.getElementById("import-status") as HTMLElement,
+  previewStatus: document.getElementById("preview-status") as HTMLElement,
+  dashboardStatus: document.getElementById("dashboard-status") as HTMLElement,
+  settingsStatus: document.getElementById("settings-status") as HTMLElement,
 
-  meta: document.getElementById('meta') as HTMLElement,
+  meta: document.getElementById("meta") as HTMLElement,
 
-  btnPrev: document.getElementById('btn-prev') as HTMLButtonElement,
-  btnNext: document.getElementById('btn-next') as HTMLButtonElement,
-  btnRefresh: document.getElementById('btn-refresh') as HTMLButtonElement,
-  pageInfo: document.getElementById('page-info') as HTMLElement,
-  pageSize: document.getElementById('page-size') as HTMLSelectElement,
-  tableHead: document.querySelector('#data-table thead') as HTMLTableSectionElement,
-  tableBody: document.querySelector('#data-table tbody') as HTMLTableSectionElement,
+  btnPrev: document.getElementById("btn-prev") as HTMLButtonElement,
+  btnNext: document.getElementById("btn-next") as HTMLButtonElement,
+  btnRefresh: document.getElementById("btn-refresh") as HTMLButtonElement,
+  pageInfo: document.getElementById("page-info") as HTMLElement,
+  pageSize: document.getElementById("page-size") as HTMLSelectElement,
+  tableHead: document.querySelector(
+    "#data-table thead",
+  ) as HTMLTableSectionElement,
+  tableBody: document.querySelector(
+    "#data-table tbody",
+  ) as HTMLTableSectionElement,
 
-  btnMrnRebuild: document.getElementById('btn-mrn-rebuild') as HTMLButtonElement,
-  btnMrnRefresh: document.getElementById('btn-mrn-refresh') as HTMLButtonElement,
-  mrnMeta: document.getElementById('mrn-meta') as HTMLElement,
-  mrnGroups: document.getElementById('mrn-groups') as HTMLElement,
+  btnMrnRebuild: document.getElementById(
+    "btn-mrn-rebuild",
+  ) as HTMLButtonElement,
+  btnMrnRefresh: document.getElementById(
+    "btn-mrn-refresh",
+  ) as HTMLButtonElement,
+  mrnMeta: document.getElementById("mrn-meta") as HTMLElement,
+  mrnGroups: document.getElementById("mrn-groups") as HTMLElement,
 
-  validationMonth: document.getElementById('validation-month') as HTMLInputElement,
-  btnValidationRefresh: document.getElementById('btn-validation-refresh') as HTMLButtonElement,
-  validationMeta: document.getElementById('validation-meta') as HTMLElement,
-  validationGroups: document.getElementById('validation-groups') as HTMLElement,
-  validationStatus: document.getElementById('validation-status') as HTMLElement,
+  validationMonth: document.getElementById(
+    "validation-month",
+  ) as HTMLInputElement,
+  btnValidationRefresh: document.getElementById(
+    "btn-validation-refresh",
+  ) as HTMLButtonElement,
+  validationMeta: document.getElementById("validation-meta") as HTMLElement,
+  validationGroups: document.getElementById("validation-groups") as HTMLElement,
+  validationStatus: document.getElementById("validation-status") as HTMLElement,
 
-  dbPath: document.getElementById('db-path') as HTMLElement,
-  btnShowDb: document.getElementById('btn-show-db') as HTMLButtonElement,
-  btnClear: document.getElementById('btn-clear') as HTMLButtonElement,
+  dbPath: document.getElementById("db-path") as HTMLElement,
+  btnShowDb: document.getElementById("btn-show-db") as HTMLButtonElement,
+  btnClear: document.getElementById("btn-clear") as HTMLButtonElement,
 };
 
 const state = {
-  tab: 'import' as TabName,
+  tab: "import" as TabName,
   page: 1,
   pageSize: 250,
   total: 0,
@@ -63,10 +87,12 @@ let busyCount = 0;
 function setBusy(isBusy: boolean) {
   if (isBusy) busyCount += 1;
   else busyCount = Math.max(0, busyCount - 1);
-  document.body.classList.toggle('is-busy', busyCount > 0);
+  document.body.classList.toggle("is-busy", busyCount > 0);
 }
 
-let lastUpdateCheck: Awaited<ReturnType<typeof window.api.checkForUpdates>> | null = null;
+let lastUpdateCheck: Awaited<
+  ReturnType<typeof window.api.checkForUpdates>
+> | null = null;
 let lastUpdateStatus: unknown | null = null;
 let updateStatusUnsub: (() => void) | null = null;
 let updateFallbackUrl: string | null = null;
@@ -74,103 +100,125 @@ let updatePrimaryBtn: HTMLButtonElement | null = null;
 let updateFallbackBtn: HTMLButtonElement | null = null;
 
 function renderUpdateStatus(status: unknown) {
-  if (!document.getElementById('update-backdrop')) return;
+  if (!document.getElementById("update-backdrop")) return;
 
-  const textEl = document.getElementById('update-status-text');
-  const barWrap = document.getElementById('update-progress-wrap');
-  const barEl = document.getElementById('update-progress-bar') as HTMLDivElement | null;
+  const textEl = document.getElementById("update-status-text");
+  const barWrap = document.getElementById("update-progress-wrap");
+  const barEl = document.getElementById(
+    "update-progress-bar",
+  ) as HTMLDivElement | null;
   if (!textEl) return;
 
-  const s = (status ?? {}) as { state?: unknown; message?: unknown; percent?: unknown };
-  const state = typeof s.state === 'string' ? s.state : 'idle';
-  const msg = typeof s.message === 'string' ? s.message : '';
-  const pct = typeof s.percent === 'number' && Number.isFinite(s.percent) ? Math.max(0, Math.min(100, s.percent)) : null;
+  const s = (status ?? {}) as {
+    state?: unknown;
+    message?: unknown;
+    percent?: unknown;
+  };
+  const state = typeof s.state === "string" ? s.state : "idle";
+  const msg = typeof s.message === "string" ? s.message : "";
+  const pct =
+    typeof s.percent === "number" && Number.isFinite(s.percent)
+      ? Math.max(0, Math.min(100, s.percent))
+      : null;
 
   const label =
-    state === 'checking'
-      ? 'Проверяю обновление…'
-      : state === 'available'
-        ? 'Обновление найдено.'
-        : state === 'not-available'
-          ? 'Обновление недоступно.'
-          : state === 'downloading'
-            ? `Скачиваю…${pct == null ? '' : ` ${pct.toFixed(0)}%`}`
-            : state === 'downloaded'
-              ? 'Скачано. Устанавливаю…'
-              : state === 'installing'
-                ? 'Устанавливаю…'
-                : state === 'error'
-                  ? `Ошибка обновления: ${msg || 'unknown'}`
-                  : msg || '';
+    state === "checking"
+      ? "Проверяю обновление…"
+      : state === "available"
+        ? "Обновление найдено."
+        : state === "not-available"
+          ? "Обновление недоступно."
+          : state === "downloading"
+            ? `Скачиваю…${pct == null ? "" : ` ${pct.toFixed(0)}%`}`
+            : state === "downloaded"
+              ? "Скачано. Устанавливаю…"
+              : state === "installing"
+                ? "Устанавливаю…"
+                : state === "error"
+                  ? `Ошибка обновления: ${msg || "unknown"}`
+                  : msg || "";
 
   textEl.textContent = label;
 
   if (barWrap && barEl) {
-    if (pct == null || state !== 'downloading') {
-      barWrap.classList.add('d-none');
-      barEl.style.width = '0%';
+    if (pct == null || state !== "downloading") {
+      barWrap.classList.add("d-none");
+      barEl.style.width = "0%";
     } else {
-      barWrap.classList.remove('d-none');
+      barWrap.classList.remove("d-none");
       barEl.style.width = `${pct}%`;
     }
   }
 
   if (updateFallbackBtn) {
-    const showFallback = state === 'error' || state === 'not-available';
-    updateFallbackBtn.classList.toggle('d-none', !showFallback || !updateFallbackUrl);
+    const showFallback = state === "error" || state === "not-available";
+    updateFallbackBtn.classList.toggle(
+      "d-none",
+      !showFallback || !updateFallbackUrl,
+    );
   }
   if (updatePrimaryBtn) {
-    const enable = state === 'idle' || state === 'error' || state === 'not-available';
+    const enable =
+      state === "idle" || state === "error" || state === "not-available";
     updatePrimaryBtn.disabled = !enable;
   }
 }
 
-function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVersion: string, feedUrl: string | null) {
-  if (document.getElementById('update-backdrop')) return;
-  document.body.classList.add('update-required');
+function renderUpdateBlock(
+  latestVersion: string,
+  downloadUrl: string,
+  currentVersion: string,
+  feedUrl: string | null,
+) {
+  if (document.getElementById("update-backdrop")) return;
+  document.body.classList.add("update-required");
 
-  const el = document.createElement('div');
-  el.id = 'update-backdrop';
-  el.className = 'update-backdrop';
+  const el = document.createElement("div");
+  el.id = "update-backdrop";
+  el.className = "update-backdrop";
   el.innerHTML = `
-    <div class="update-card" role="dialog" aria-modal="true" aria-label="Требуется обновление">
-      <div class="update-card-header">
-        <div>
-          <div class="update-title">Требуется обновление</div>
-          <div class="update-sub">Текущая версия: ${escapeHtml(currentVersion)} • Доступна: ${escapeHtml(latestVersion)}</div>
-        </div>
-        <div class="update-badge">
-          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin:0">
-            <path d="M12 3v10m0 0l4-4m-4 4l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-          </svg>
-          v${escapeHtml(latestVersion)}
-        </div>
+  <div class="update-card" role="dialog" aria-modal="true" aria-label="Wymagana aktualizacja">
+    <div class="update-card-header">
+      <div>
+        <div class="update-title">Wymagana aktualizacja</div>
+        <div class="update-sub">Aktualna wersja: ${escapeHtml(currentVersion)} • Dostępna: ${escapeHtml(latestVersion)}</div>
       </div>
-      <div class="update-card-body">
-        <div class="muted">Чтобы продолжить, установи последнюю версию приложения.</div>
-        <div id="update-status-text" class="muted" style="margin-top:8px"></div>
-        <div id="update-progress-wrap" class="progress d-none" style="height:8px; margin-top:8px">
-          <div id="update-progress-bar" class="progress-bar" role="progressbar" style="width:0%"></div>
-        </div>
-        <div class="update-actions">
-          <button id="btn-update-download" class="btn btn-outline-light d-none">
-            Скачать установщик
-          </button>
-          <button id="btn-update-now" class="btn btn-primary">
-            Обновись до версии ${escapeHtml(latestVersion)}
-          </button>
-        </div>
+      <div class="update-badge">
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin:0">
+          <path d="M12 3v10m0 0l4-4m-4 4l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+        v${escapeHtml(latestVersion)}
       </div>
     </div>
-  `;
+    <div class="update-card-body">
+      <div class="muted">Aby kontynuować, zainstaluj najnowszą wersję aplikacji.</div>
+      <div id="update-status-text" class="muted" style="margin-top:8px"></div>
+      <div id="update-progress-wrap" class="progress d-none" style="height:8px; margin-top:8px">
+        <div id="update-progress-bar" class="progress-bar" role="progressbar" style="width:0%"></div>
+      </div>
+      <div class="update-actions">
+        <button id="btn-update-download" class="btn btn-outline-light d-none">
+          Pobierz instalator
+        </button>
+        <button id="btn-update-now" class="btn btn-primary">
+          Zaktualizuj do wersji ${escapeHtml(latestVersion)}
+        </button>
+      </div>
+    </div>
+  </div>
+`;
   document.body.appendChild(el);
 
   updateFallbackUrl = downloadUrl;
-  updatePrimaryBtn = el.querySelector('#btn-update-now') as HTMLButtonElement | null;
-  updateFallbackBtn = el.querySelector('#btn-update-download') as HTMLButtonElement | null;
+  updatePrimaryBtn = el.querySelector(
+    "#btn-update-now",
+  ) as HTMLButtonElement | null;
+  updateFallbackBtn = el.querySelector(
+    "#btn-update-download",
+  ) as HTMLButtonElement | null;
 
-  updateFallbackBtn?.addEventListener('click', async () => {
+  updateFallbackBtn?.addEventListener("click", async () => {
     if (!updateFallbackUrl) return;
     updateFallbackBtn.disabled = true;
     try {
@@ -180,20 +228,26 @@ function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVe
     }
   });
 
-  updatePrimaryBtn?.addEventListener('click', async () => {
+  updatePrimaryBtn?.addEventListener("click", async () => {
     updatePrimaryBtn.disabled = true;
     try {
       if (feedUrl) {
         const started = await window.api.downloadAndInstallUpdate(feedUrl);
         if (!started.ok) {
-          renderUpdateStatus({ state: 'error', message: started.error ?? 'Failed to start updater' });
-          updateFallbackBtn?.classList.remove('d-none');
+          renderUpdateStatus({
+            state: "error",
+            message: started.error ?? "Failed to start updater",
+          });
+          updateFallbackBtn?.classList.remove("d-none");
         } else {
-          renderUpdateStatus({ state: 'checking' });
+          renderUpdateStatus({ state: "checking" });
         }
       } else {
-        updateFallbackBtn?.classList.remove('d-none');
-        renderUpdateStatus({ state: 'error', message: 'Auto-update not available.' });
+        updateFallbackBtn?.classList.remove("d-none");
+        renderUpdateStatus({
+          state: "error",
+          message: "Auto-update not available.",
+        });
       }
     } finally {
       // autoUpdater will quit+install; fallback button can quit the app
@@ -203,7 +257,7 @@ function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVe
   renderUpdateStatus(lastUpdateStatus);
 
   const stop = (e: Event) => e.preventDefault();
-  window.addEventListener('keydown', stop, { capture: true });
+  window.addEventListener("keydown", stop, { capture: true });
 }
 
 async function checkForUpdatesAndBlock() {
@@ -213,7 +267,12 @@ async function checkForUpdatesAndBlock() {
     if (!res.supported) return;
     if (!res.updateAvailable) return;
     if (!res.latestVersion || !res.downloadUrl) return;
-    renderUpdateBlock(res.latestVersion, res.downloadUrl, res.currentVersion, res.squirrelFeedUrl);
+    renderUpdateBlock(
+      res.latestVersion,
+      res.downloadUrl,
+      res.currentVersion,
+      res.squirrelFeedUrl,
+    );
   } catch {
     // ignore
   }
@@ -228,49 +287,58 @@ function errorMessage(e: unknown): string {
   try {
     return String(e);
   } catch {
-    return 'Nieznany błąd';
+    return "Nieznany błąd";
   }
 }
 
 function setTab(name: TabName) {
   state.tab = name;
 
-  els.tabImportBtn.classList.toggle('active', name === 'import');
-  els.tabPreviewBtn.classList.toggle('active', name === 'preview');
-  els.tabDashboardBtn.classList.toggle('active', name === 'dashboard');
-  els.tabValidationBtn.classList.toggle('active', name === 'validation');
-  els.tabSettingsBtn.classList.toggle('active', name === 'settings');
+  els.tabImportBtn.classList.toggle("active", name === "import");
+  els.tabPreviewBtn.classList.toggle("active", name === "preview");
+  els.tabDashboardBtn.classList.toggle("active", name === "dashboard");
+  els.tabValidationBtn.classList.toggle("active", name === "validation");
+  els.tabSettingsBtn.classList.toggle("active", name === "settings");
 
-  els.tabImportBtn.setAttribute('aria-selected', String(name === 'import'));
-  els.tabPreviewBtn.setAttribute('aria-selected', String(name === 'preview'));
-  els.tabDashboardBtn.setAttribute('aria-selected', String(name === 'dashboard'));
-  els.tabValidationBtn.setAttribute('aria-selected', String(name === 'validation'));
-  els.tabSettingsBtn.setAttribute('aria-selected', String(name === 'settings'));
+  els.tabImportBtn.setAttribute("aria-selected", String(name === "import"));
+  els.tabPreviewBtn.setAttribute("aria-selected", String(name === "preview"));
+  els.tabDashboardBtn.setAttribute(
+    "aria-selected",
+    String(name === "dashboard"),
+  );
+  els.tabValidationBtn.setAttribute(
+    "aria-selected",
+    String(name === "validation"),
+  );
+  els.tabSettingsBtn.setAttribute("aria-selected", String(name === "settings"));
 
-  els.tabImport.classList.toggle('hidden', name !== 'import');
-  els.tabPreview.classList.toggle('hidden', name !== 'preview');
-  els.tabDashboard.classList.toggle('hidden', name !== 'dashboard');
-  els.tabValidation.classList.toggle('hidden', name !== 'validation');
-  els.tabSettings.classList.toggle('hidden', name !== 'settings');
+  els.tabImport.classList.toggle("hidden", name !== "import");
+  els.tabPreview.classList.toggle("hidden", name !== "preview");
+  els.tabDashboard.classList.toggle("hidden", name !== "dashboard");
+  els.tabValidation.classList.toggle("hidden", name !== "validation");
+  els.tabSettings.classList.toggle("hidden", name !== "settings");
 
-  if (name === 'preview') void refreshPreview();
-  if (name === 'dashboard') void refreshDashboard();
-  if (name === 'validation') void refreshValidation();
-  if (name === 'settings') void refreshSettings();
+  if (name === "preview") void refreshPreview();
+  if (name === "dashboard") void refreshDashboard();
+  if (name === "validation") void refreshValidation();
+  if (name === "settings") void refreshSettings();
 }
 
 function escapeHtml(value: string) {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
-function renderTable(page: { columns: Array<{ field: string; label: string }>; rows: Array<Record<string, string | null>> }) {
+function renderTable(page: {
+  columns: Array<{ field: string; label: string }>;
+  rows: Array<Record<string, string | null>>;
+}) {
   const headers = page.columns;
-  const thead = `<tr>${headers.map((c) => `<th title="${escapeHtml(c.label)}">${escapeHtml(c.label)}</th>`).join('')}</tr>`;
+  const thead = `<tr>${headers.map((c) => `<th title="${escapeHtml(c.label)}">${escapeHtml(c.label)}</th>`).join("")}</tr>`;
   els.tableHead.innerHTML = thead;
 
   const body = page.rows
@@ -278,13 +346,13 @@ function renderTable(page: { columns: Array<{ field: string; label: string }>; r
       const tds = headers
         .map((c) => {
           const v = row[c.field];
-          const text = v == null ? '' : String(v);
+          const text = v == null ? "" : String(v);
           return `<td title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
         })
-        .join('');
+        .join("");
       return `<tr>${tds}</tr>`;
     })
-    .join('');
+    .join("");
   els.tableBody.innerHTML = body;
 }
 
@@ -292,14 +360,14 @@ async function refreshMeta() {
   try {
     const meta = await window.api.getRaportMeta();
     if (!meta.importedAt || meta.rowCount === 0) {
-      els.meta.textContent = 'Brak zaimportowanych danych';
+      els.meta.textContent = "Brak zaimportowanych danych";
       return;
     }
-    const when = new Date(meta.importedAt).toLocaleString('pl-PL');
-    const file = meta.sourceFile ? ` • Plik: ${meta.sourceFile}` : '';
+    const when = new Date(meta.importedAt).toLocaleString("pl-PL");
+    const file = meta.sourceFile ? ` • Plik: ${meta.sourceFile}` : "";
     els.meta.textContent = `Zaimportowano: ${when} • Wiersze: ${meta.rowCount}${file}`;
   } catch {
-    els.meta.textContent = 'Nie udało się odczytać informacji o imporcie';
+    els.meta.textContent = "Nie udało się odczytać informacji o imporcie";
   }
 }
 
@@ -313,7 +381,7 @@ function updatePagination() {
 }
 
 async function refreshPreview() {
-  setStatus(els.previewStatus, 'Ładowanie danych…');
+  setStatus(els.previewStatus, "Ładowanie danych…");
   setBusy(true);
   await refreshMeta();
 
@@ -323,7 +391,10 @@ async function refreshPreview() {
     state.columns = page.columns;
     renderTable(page);
     updatePagination();
-    setStatus(els.previewStatus, page.total === 0 ? 'Brak danych do wyświetlenia.' : '');
+    setStatus(
+      els.previewStatus,
+      page.total === 0 ? "Brak danych do wyświetlenia." : "",
+    );
   } catch (e: unknown) {
     setStatus(els.previewStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
@@ -332,21 +403,24 @@ async function refreshPreview() {
 }
 
 async function refreshSettings() {
-  setStatus(els.settingsStatus, '');
+  setStatus(els.settingsStatus, "");
   setBusy(true);
   try {
     const db = await window.api.getDbInfo();
-    els.dbPath.textContent = db.filePath + (db.exists ? '' : ' (nie utworzono)');
+    els.dbPath.textContent =
+      db.filePath + (db.exists ? "" : " (nie utworzono)");
   } catch (e: unknown) {
-    els.dbPath.textContent = '—';
+    els.dbPath.textContent = "—";
     setStatus(els.settingsStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
     if (!els.settingsStatus.textContent && lastUpdateCheck) {
       const u = lastUpdateCheck;
-      const manifest = u.manifestUrl ? ` (${u.manifestUrl})` : '';
-      const base = `Updates: current=${u.currentVersion} latest=${u.latestVersion ?? '—'} available=${u.updateAvailable}`;
-      if (!u.supported) setStatus(els.settingsStatus, `${base} disabled${manifest}`);
-      else if (u.error) setStatus(els.settingsStatus, `${base} error=${u.error}${manifest}`);
+      const manifest = u.manifestUrl ? ` (${u.manifestUrl})` : "";
+      const base = `Updates: current=${u.currentVersion} latest=${u.latestVersion ?? "—"} available=${u.updateAvailable}`;
+      if (!u.supported)
+        setStatus(els.settingsStatus, `${base} disabled${manifest}`);
+      else if (u.error)
+        setStatus(els.settingsStatus, `${base} error=${u.error}${manifest}`);
       else setStatus(els.settingsStatus, `${base}${manifest}`);
     }
     setBusy(false);
@@ -354,18 +428,21 @@ async function refreshSettings() {
 }
 
 const LABELS: Record<string, string> = {
-  id: 'ID',
-  rowNumber: 'Row (Excel)',
+  id: "ID",
+  rowNumber: "Row (Excel)",
   ...Object.fromEntries(RAPORT_COLUMNS.map((c) => [c.field, c.label])),
 };
 
 function formatMaybeDate(s: string): string {
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
-  return d.toLocaleString('pl-PL');
+  return d.toLocaleString("pl-PL");
 }
 
-function uniqValues(rows: Array<Record<string, string | null>>, field: string): string[] {
+function uniqValues(
+  rows: Array<Record<string, string | null>>,
+  field: string,
+): string[] {
   const out = new Set<string>();
   for (const r of rows) {
     const v = r[field];
@@ -376,26 +453,30 @@ function uniqValues(rows: Array<Record<string, string | null>>, field: string): 
   return Array.from(out);
 }
 
-function renderPills(values: string[], emptyText = '-') {
-  if (values.length === 0) return `<div class="pills"><span class="pill">${escapeHtml(emptyText)}</span></div>`;
+function renderPills(values: string[], emptyText = "-") {
+  if (values.length === 0)
+    return `<div class="pills"><span class="pill">${escapeHtml(emptyText)}</span></div>`;
   const slice = values.slice(0, 30);
   const rest = values.length - slice.length;
   return `<div class="pills">${slice
-    .map((v) => `<span class="pill" title="${escapeHtml(v)}">${escapeHtml(v)}</span>`)
-    .join('')}${rest > 0 ? `<span class="pill">+${rest}</span>` : ''}</div>`;
+    .map(
+      (v) =>
+        `<span class="pill" title="${escapeHtml(v)}">${escapeHtml(v)}</span>`,
+    )
+    .join("")}${rest > 0 ? `<span class="pill">+${rest}</span>` : ""}</div>`;
 }
 
 const ROW_DETAIL_KEYS: ReadonlyArray<string> = [
-  'id',
-  'rowNumber',
-  'nr_sad',
-  'numer_pozycji',
-  'rodzaj_sad',
-  'typ_sad_u',
-  'data_sad_p_54',
-  'data_mrn',
-  'stan',
-  'numer_mrn',
+  "id",
+  "rowNumber",
+  "nr_sad",
+  "numer_pozycji",
+  "rodzaj_sad",
+  "typ_sad_u",
+  "data_sad_p_54",
+  "data_mrn",
+  "stan",
+  "numer_mrn",
 ];
 
 function renderRowKv(row: Record<string, string | null>): string {
@@ -414,37 +495,37 @@ function renderRowKv(row: Record<string, string | null>): string {
   }
 
   if (parts.length === 0) return `<div class="muted">Brak danych.</div>`;
-  return `<div class="kv-grid">${parts.join('')}</div>`;
+  return `<div class="kv-grid">${parts.join("")}</div>`;
 }
 
 async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
-  const numerMrn = detailsEl.dataset.mrn ?? '';
+  const numerMrn = detailsEl.dataset.mrn ?? "";
   if (!numerMrn) return;
-  if (detailsEl.dataset.loaded === '1') return;
-  if (detailsEl.dataset.loading === '1') return;
+  if (detailsEl.dataset.loaded === "1") return;
+  if (detailsEl.dataset.loading === "1") return;
 
-  const body = detailsEl.querySelector('.accordion-body') as HTMLElement | null;
+  const body = detailsEl.querySelector(".accordion-body") as HTMLElement | null;
   if (!body) return;
 
-  detailsEl.dataset.loading = '1';
+  detailsEl.dataset.loading = "1";
   body.innerHTML = `<div class="muted">Ładowanie...</div>`;
 
   try {
     const res = await window.api.getMrnBatchRows(numerMrn);
     const rows = res.rows ?? [];
 
-    const nrSad = uniqValues(rows, 'nr_sad');
-    const dataMrn = uniqValues(rows, 'data_mrn');
+    const nrSad = uniqValues(rows, "nr_sad");
+    const dataMrn = uniqValues(rows, "data_mrn");
 
     const rowsHtml =
       rows.length === 0
         ? `<div class="muted">Brak wierszy.</div>`
         : rows
             .map((row) => {
-              const rowNumber = row.rowNumber ? String(row.rowNumber) : '-';
-              const nr = row.nr_sad ? String(row.nr_sad) : '-';
-              const dt = row.data_mrn ? String(row.data_mrn) : '-';
-              const st = row.stan ? String(row.stan) : '-';
+              const rowNumber = row.rowNumber ? String(row.rowNumber) : "-";
+              const nr = row.nr_sad ? String(row.nr_sad) : "-";
+              const dt = row.data_mrn ? String(row.data_mrn) : "-";
+              const st = row.stan ? String(row.stan) : "-";
 
               return `
                 <details class="row-accordion">
@@ -460,7 +541,7 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
                 </details>
               `;
             })
-            .join('');
+            .join("");
 
     body.innerHTML = `
       <div class="muted">Nr SAD</div>
@@ -469,29 +550,32 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
       ${renderPills(dataMrn)}
       ${rowsHtml}
     `;
-    detailsEl.dataset.loaded = '1';
+    detailsEl.dataset.loaded = "1";
   } catch (e: unknown) {
     body.innerHTML = `<div class="muted">Błąd: ${escapeHtml(errorMessage(e))}</div>`;
   } finally {
-    detailsEl.dataset.loading = '0';
+    detailsEl.dataset.loading = "0";
   }
 }
 
 async function refreshDashboard() {
-  setStatus(els.dashboardStatus, 'Ładowanie...');
-  els.mrnGroups.innerHTML = '';
-  els.mrnMeta.textContent = '';
+  setStatus(els.dashboardStatus, "Ładowanie...");
+  els.mrnGroups.innerHTML = "";
+  els.mrnMeta.textContent = "";
   setBusy(true);
 
   try {
-    const [meta, groups] = await Promise.all([window.api.getMrnBatchMeta(), window.api.getMrnBatchGroups(1000)]);
+    const [meta, groups] = await Promise.all([
+      window.api.getMrnBatchMeta(),
+      window.api.getMrnBatchGroups(1000),
+    ]);
 
-    const scanned = meta.scannedAt ? formatMaybeDate(meta.scannedAt) : '-';
+    const scanned = meta.scannedAt ? formatMaybeDate(meta.scannedAt) : "-";
     els.mrnMeta.textContent = `Skan: ${scanned} | Grupy: ${meta.groups} | Wiersze: ${meta.rows}`;
 
     if (groups.length === 0) {
       els.mrnGroups.innerHTML = `<div class="muted" style="padding:10px 12px;">Brak duplikatów. Kliknij „Skanuj”, aby zbudować mrn_batch.</div>`;
-      setStatus(els.dashboardStatus, '');
+      setStatus(els.dashboardStatus, "");
       return;
     }
 
@@ -509,16 +593,18 @@ async function refreshDashboard() {
           </details>
         `,
       )
-      .join('');
+      .join("");
 
-    for (const el of Array.from(els.mrnGroups.querySelectorAll('details.accordion'))) {
+    for (const el of Array.from(
+      els.mrnGroups.querySelectorAll("details.accordion"),
+    )) {
       const d = el as HTMLDetailsElement;
-      d.addEventListener('toggle', () => {
+      d.addEventListener("toggle", () => {
         if (d.open) void loadMrnGroupDetails(d);
       });
     }
 
-    setStatus(els.dashboardStatus, '');
+    setStatus(els.dashboardStatus, "");
   } catch (e: unknown) {
     setStatus(els.dashboardStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
@@ -536,13 +622,13 @@ type ValidationGroupKey = {
   kod_towaru: string;
 };
 
-type ValidationDayFilter = 'all' | 'outliersHigh' | 'outliersLow' | 'singles';
+type ValidationDayFilter = "all" | "outliersHigh" | "outliersLow" | "singles";
 
 function encodeKey(key: unknown): string {
   try {
     return btoa(unescape(encodeURIComponent(JSON.stringify(key))));
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -556,62 +642,76 @@ function decodeKey<T>(key: string): T | null {
 }
 
 function prettyKeyLine(label: string, value: string): string {
-  const v = value && value.trim().length > 0 ? value : '-';
+  const v = value && value.trim().length > 0 ? value : "-";
   return `<div class="kv-key">${escapeHtml(label)}</div><div class="kv-val">${escapeHtml(v)}</div>`;
 }
 
-function renderCoefArrow(side: 'low' | 'high' | null): string {
-  if (side === 'low') return '<span class="coef-arrow low" title="Below lower IQR bound">&darr;</span>';
-  if (side === 'high') return '<span class="coef-arrow high" title="Above upper IQR bound">&uarr;</span>';
-  return '';
+function renderCoefArrow(side: "low" | "high" | null): string {
+  if (side === "low")
+    return '<span class="coef-arrow low" title="Below lower IQR bound">&darr;</span>';
+  if (side === "high")
+    return '<span class="coef-arrow high" title="Above upper IQR bound">&uarr;</span>';
+  return "";
 }
 
 async function refreshValidationDashboardCounts() {
   const month = els.validationMonth.value;
   if (!month) return;
-  const UP = '\u2191';
-  const DOWN = '\u2193';
+  const UP = "\u2191";
+  const DOWN = "\u2193";
   try {
     const dash = await window.api.getValidationDashboard(month);
 
-    const statHigh = els.validationGroups.querySelector('#validation-stat-high') as HTMLElement | null;
-    const statLow = els.validationGroups.querySelector('#validation-stat-low') as HTMLElement | null;
-    const statSingles = els.validationGroups.querySelector('#validation-stat-singles') as HTMLElement | null;
-    const statManual = els.validationGroups.querySelector('#validation-stat-manual') as HTMLElement | null;
+    const statHigh = els.validationGroups.querySelector(
+      "#validation-stat-high",
+    ) as HTMLElement | null;
+    const statLow = els.validationGroups.querySelector(
+      "#validation-stat-low",
+    ) as HTMLElement | null;
+    const statSingles = els.validationGroups.querySelector(
+      "#validation-stat-singles",
+    ) as HTMLElement | null;
+    const statManual = els.validationGroups.querySelector(
+      "#validation-stat-manual",
+    ) as HTMLElement | null;
     if (statHigh) statHigh.textContent = String(dash.stats.outliersHigh);
     if (statLow) statLow.textContent = String(dash.stats.outliersLow);
     if (statSingles) statSingles.textContent = String(dash.stats.singles);
     if (statManual) statManual.textContent = String(dash.stats.verifiedManual);
 
     const byDate = new Map(dash.days.map((d) => [d.date, d] as const));
-    for (const el of Array.from(els.validationGroups.querySelectorAll('.day-count'))) {
+    for (const el of Array.from(
+      els.validationGroups.querySelectorAll(".day-count"),
+    )) {
       const span = el as HTMLElement;
-      const date = span.dataset.date ?? '';
+      const date = span.dataset.date ?? "";
       const d = byDate.get(date);
-      span.textContent = d ? String(d.total) : '0';
+      span.textContent = d ? String(d.total) : "0";
     }
 
-    for (const el of Array.from(els.validationGroups.querySelectorAll('.day-badge'))) {
+    for (const el of Array.from(
+      els.validationGroups.querySelectorAll(".day-badge"),
+    )) {
       const span = el as HTMLElement;
-      const date = span.dataset.date ?? '';
-      const field = span.dataset.field ?? '';
+      const date = span.dataset.date ?? "";
+      const field = span.dataset.field ?? "";
       const d = byDate.get(date);
       if (!d) {
-        if (field === 'high') span.textContent = `${UP} 0`;
-        else if (field === 'low') span.textContent = `${DOWN} 0`;
-        else if (field === 'singles') span.textContent = `1x 0`;
-        if (field !== 'total') span.dataset.zero = '1';
+        if (field === "high") span.textContent = `${UP} 0`;
+        else if (field === "low") span.textContent = `${DOWN} 0`;
+        else if (field === "singles") span.textContent = `1x 0`;
+        if (field !== "total") span.dataset.zero = "1";
         continue;
       }
-      if (field === 'high') {
+      if (field === "high") {
         span.textContent = `${UP} ${d.outliersHigh}`;
-        span.dataset.zero = d.outliersHigh ? '0' : '1';
-      } else if (field === 'low') {
+        span.dataset.zero = d.outliersHigh ? "0" : "1";
+      } else if (field === "low") {
         span.textContent = `${DOWN} ${d.outliersLow}`;
-        span.dataset.zero = d.outliersLow ? '0' : '1';
-      } else if (field === 'singles') {
+        span.dataset.zero = d.outliersLow ? "0" : "1";
+      } else if (field === "singles") {
         span.textContent = `1x ${d.singles}`;
-        span.dataset.zero = d.singles ? '0' : '1';
+        span.dataset.zero = d.singles ? "0" : "1";
       }
     }
   } catch {
@@ -620,19 +720,19 @@ async function refreshValidationDashboardCounts() {
 }
 
 async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
-  const keyEncoded = detailsEl.dataset.key ?? '';
+  const keyEncoded = detailsEl.dataset.key ?? "";
   const month = els.validationMonth.value;
   if (!keyEncoded || !month) return;
-  if (detailsEl.dataset.loaded === '1') return;
-  if (detailsEl.dataset.loading === '1') return;
+  if (detailsEl.dataset.loaded === "1") return;
+  if (detailsEl.dataset.loading === "1") return;
 
   const key = decodeKey<ValidationGroupKey>(keyEncoded);
   if (!key) return;
 
-  const body = detailsEl.querySelector('.accordion-body') as HTMLElement | null;
+  const body = detailsEl.querySelector(".accordion-body") as HTMLElement | null;
   if (!body) return;
 
-  detailsEl.dataset.loading = '1';
+  detailsEl.dataset.loading = "1";
   body.innerHTML = `<div class="muted">Ładowanie...</div>`;
 
   try {
@@ -641,13 +741,13 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
 
     const keyGrid = `
       <div class="kv-grid">
-        ${prettyKeyLine('Odbiorca', res.key.odbiorca)}
-        ${prettyKeyLine('Kraj wysylki', res.key.kraj_wysylki)}
-        ${prettyKeyLine('Warunki dostawy', res.key.warunki_dostawy)}
-        ${prettyKeyLine('Waluta', res.key.waluta)}
-        ${prettyKeyLine('Kurs waluty', res.key.kurs_waluty)}
-        ${prettyKeyLine('Transport (rodzaj)', res.key.transport_na_granicy_rodzaj)}
-        ${prettyKeyLine('Kod towaru', res.key.kod_towaru)}
+        ${prettyKeyLine("Odbiorca", res.key.odbiorca)}
+        ${prettyKeyLine("Kraj wysylki", res.key.kraj_wysylki)}
+        ${prettyKeyLine("Warunki dostawy", res.key.warunki_dostawy)}
+        ${prettyKeyLine("Waluta", res.key.waluta)}
+        ${prettyKeyLine("Kurs waluty", res.key.kurs_waluty)}
+        ${prettyKeyLine("Transport (rodzaj)", res.key.transport_na_granicy_rodzaj)}
+        ${prettyKeyLine("Kod towaru", res.key.kod_towaru)}
       </div>
     `;
 
@@ -668,43 +768,51 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
             <tbody>
               ${items
                 .map((it) => {
-                  const coef = it.coef == null ? '-' : Number(it.coef).toFixed(6);
-                  const rowClass = it.outlier ? ' class="outlier"' : '';
+                  const coef =
+                    it.coef == null ? "-" : Number(it.coef).toFixed(6);
+                  const rowClass = it.outlier ? ' class="outlier"' : "";
                   const arrow = renderCoefArrow(it.outlierSide);
-                  const isVerifiable = it.rowId && Number.isFinite(it.rowId) && it.coef != null && Number.isFinite(it.coef);
-                  const disabledAttr = isVerifiable ? '' : ' disabled';
-                  const checkedAttr = it.verifiedManual ? ' checked' : '';
+                  const isVerifiable =
+                    it.rowId &&
+                    Number.isFinite(it.rowId) &&
+                    it.coef != null &&
+                    Number.isFinite(it.coef);
+                  const disabledAttr = isVerifiable ? "" : " disabled";
+                  const checkedAttr = it.verifiedManual ? " checked" : "";
                   const singleTag =
-                    !it.verifiedManual && it.coef != null && Number.isFinite(it.coef) && !it.checkable
+                    !it.verifiedManual &&
+                    it.coef != null &&
+                    Number.isFinite(it.coef) &&
+                    !it.checkable
                       ? '<span class="single-tag" title="Not enough items for IQR on this day">single</span>'
-                      : '';
+                      : "";
                   return `<tr${rowClass}>
-                    <td class="mono">${escapeHtml(it.data_mrn ?? '-')}</td>
-                    <td title="${escapeHtml(it.odbiorca ?? '')}">${escapeHtml(it.odbiorca ?? '-')}</td>
-                    <td class="mono">${escapeHtml(it.numer_mrn ?? '-')}</td>
+                    <td class="mono">${escapeHtml(it.data_mrn ?? "-")}</td>
+                    <td title="${escapeHtml(it.odbiorca ?? "")}">${escapeHtml(it.odbiorca ?? "-")}</td>
+                    <td class="mono">${escapeHtml(it.numer_mrn ?? "-")}</td>
                     <td class="mono coef-cell coef-col"><span class="coef-value">${escapeHtml(coef)}</span><span class="coef-meta">${singleTag}${arrow}</span></td>
                     <td class="mono manual-col">
-                      <input class="manual-verify" type="checkbox" data-rowid="${escapeHtml(String(it.rowId ?? ''))}"${checkedAttr}${disabledAttr} />
+                      <input class="manual-verify" type="checkbox" data-rowid="${escapeHtml(String(it.rowId ?? ""))}"${checkedAttr}${disabledAttr} />
                     </td>
                   </tr>`;
                 })
-                .join('')}
+                .join("")}
             </tbody>
           </table>
         `;
 
     body.innerHTML = `${keyGrid}${rows}`;
-    detailsEl.dataset.loaded = '1';
+    detailsEl.dataset.loaded = "1";
 
-    for (const el of Array.from(body.querySelectorAll('input.manual-verify'))) {
+    for (const el of Array.from(body.querySelectorAll("input.manual-verify"))) {
       const input = el as HTMLInputElement;
-      input.addEventListener('change', async () => {
+      input.addEventListener("change", async () => {
         const rowId = Number(input.dataset.rowid);
         if (!Number.isFinite(rowId) || rowId <= 0) return;
         input.disabled = true;
         try {
           await window.api.setValidationManualVerified(rowId, input.checked);
-          detailsEl.dataset.loaded = '0';
+          detailsEl.dataset.loaded = "0";
           await refreshValidationDashboardCounts();
           await loadValidationGroupDetails(detailsEl);
         } catch {
@@ -715,37 +823,37 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
   } catch (e: unknown) {
     body.innerHTML = `<div class="muted">Błąd: ${escapeHtml(errorMessage(e))}</div>`;
   } finally {
-    detailsEl.dataset.loading = '0';
+    detailsEl.dataset.loading = "0";
   }
 }
 
 async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
   const month = els.validationMonth.value;
-  const date = detailsEl.dataset.date ?? '';
+  const date = detailsEl.dataset.date ?? "";
   if (!date || !month) return;
-  if (detailsEl.dataset.loading === '1') return;
-  if (detailsEl.dataset.loaded === '1') return;
+  if (detailsEl.dataset.loading === "1") return;
+  if (detailsEl.dataset.loaded === "1") return;
 
-  const body = detailsEl.querySelector('.accordion-body') as HTMLElement | null;
+  const body = detailsEl.querySelector(".accordion-body") as HTMLElement | null;
   if (!body) return;
 
-  const filter = (detailsEl.dataset.filter as ValidationDayFilter) ?? 'all';
+  const filter = (detailsEl.dataset.filter as ValidationDayFilter) ?? "all";
 
-  detailsEl.dataset.loading = '1';
+  detailsEl.dataset.loading = "1";
   body.innerHTML = `<div class="muted">Ładowanie...</div>`;
 
   try {
     const res = await window.api.getValidationDayItems(month, date, filter);
 
     const btn = (f: ValidationDayFilter, label: string) =>
-      `<button class="btn btn-outline-light btn-sm btn-filter${filter === f ? ' active' : ''}" data-filter="${escapeHtml(f)}">${escapeHtml(label)}</button>`;
+      `<button class="btn btn-outline-light btn-sm btn-filter${filter === f ? " active" : ""}" data-filter="${escapeHtml(f)}">${escapeHtml(label)}</button>`;
 
     const filters = `
       <div class="day-filters">
-        ${btn('all', `Wszystkie (${res.totals.all})`)}
-        ${btn('outliersHigh', `↑ (${res.totals.outliersHigh})`)}
-        ${btn('outliersLow', `↓ (${res.totals.outliersLow})`)}
-        ${btn('singles', `single (${res.totals.singles})`)}
+        ${btn("all", `Wszystkie (${res.totals.all})`)}
+        ${btn("outliersHigh", `↑ (${res.totals.outliersHigh})`)}
+        ${btn("outliersLow", `↓ (${res.totals.outliersLow})`)}
+        ${btn("singles", `single (${res.totals.singles})`)}
       </div>
     `;
 
@@ -766,59 +874,67 @@ async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
             <tbody>
               ${res.items
                 .map((it) => {
-                  const coef = it.coef == null ? '-' : Number(it.coef).toFixed(6);
-                  const rowClass = it.outlier ? ' class="outlier"' : '';
+                  const coef =
+                    it.coef == null ? "-" : Number(it.coef).toFixed(6);
+                  const rowClass = it.outlier ? ' class="outlier"' : "";
                   const arrow = renderCoefArrow(it.outlierSide);
-                  const isVerifiable = it.rowId && Number.isFinite(it.rowId) && it.coef != null && Number.isFinite(it.coef);
-                  const disabledAttr = isVerifiable ? '' : ' disabled';
-                  const checkedAttr = it.verifiedManual ? ' checked' : '';
+                  const isVerifiable =
+                    it.rowId &&
+                    Number.isFinite(it.rowId) &&
+                    it.coef != null &&
+                    Number.isFinite(it.coef);
+                  const disabledAttr = isVerifiable ? "" : " disabled";
+                  const checkedAttr = it.verifiedManual ? " checked" : "";
                   const groupParts = [
-                    it.key.odbiorca || '-',
-                    it.key.kod_towaru ? `kod:${it.key.kod_towaru}` : '',
-                    it.key.waluta ? `wal:${it.key.waluta}` : '',
+                    it.key.odbiorca || "-",
+                    it.key.kod_towaru ? `kod:${it.key.kod_towaru}` : "",
+                    it.key.waluta ? `wal:${it.key.waluta}` : "",
                   ].filter(Boolean);
-                  const groupTitle = groupParts.join(' | ');
+                  const groupTitle = groupParts.join(" | ");
                   const singleTag =
-                    !it.verifiedManual && it.coef != null && Number.isFinite(it.coef) && !it.checkable
+                    !it.verifiedManual &&
+                    it.coef != null &&
+                    Number.isFinite(it.coef) &&
+                    !it.checkable
                       ? '<span class="single-tag" title="Not enough items for IQR in this group/day">single</span>'
-                      : '';
+                      : "";
                   return `<tr${rowClass}>
-                    <td class="mono">${escapeHtml(it.data_mrn ?? '-')}</td>
+                    <td class="mono">${escapeHtml(it.data_mrn ?? "-")}</td>
                     <td title="${escapeHtml(groupTitle)}">${escapeHtml(groupTitle)}</td>
-                    <td class="mono">${escapeHtml(it.numer_mrn ?? '-')}</td>
+                    <td class="mono">${escapeHtml(it.numer_mrn ?? "-")}</td>
                     <td class="mono coef-cell coef-col"><span class="coef-value">${escapeHtml(coef)}</span><span class="coef-meta">${singleTag}${arrow}</span></td>
                     <td class="mono manual-col">
-                      <input class="manual-verify" type="checkbox" data-rowid="${escapeHtml(String(it.rowId ?? ''))}"${checkedAttr}${disabledAttr} />
+                      <input class="manual-verify" type="checkbox" data-rowid="${escapeHtml(String(it.rowId ?? ""))}"${checkedAttr}${disabledAttr} />
                     </td>
                   </tr>`;
                 })
-                .join('')}
+                .join("")}
             </tbody>
           </table>
         `;
 
     body.innerHTML = `${filters}${rows}`;
-    detailsEl.dataset.loaded = '1';
+    detailsEl.dataset.loaded = "1";
 
-    for (const el of Array.from(body.querySelectorAll('button[data-filter]'))) {
+    for (const el of Array.from(body.querySelectorAll("button[data-filter]"))) {
       const b = el as HTMLButtonElement;
-      b.addEventListener('click', () => {
-        const f = (b.dataset.filter as ValidationDayFilter) ?? 'all';
+      b.addEventListener("click", () => {
+        const f = (b.dataset.filter as ValidationDayFilter) ?? "all";
         detailsEl.dataset.filter = f;
-        detailsEl.dataset.loaded = '0';
+        detailsEl.dataset.loaded = "0";
         void loadValidationDayDetails(detailsEl);
       });
     }
 
-    for (const el of Array.from(body.querySelectorAll('input.manual-verify'))) {
+    for (const el of Array.from(body.querySelectorAll("input.manual-verify"))) {
       const input = el as HTMLInputElement;
-      input.addEventListener('change', async () => {
+      input.addEventListener("change", async () => {
         const rowId = Number(input.dataset.rowid);
         if (!Number.isFinite(rowId) || rowId <= 0) return;
         input.disabled = true;
         try {
           await window.api.setValidationManualVerified(rowId, input.checked);
-          detailsEl.dataset.loaded = '0';
+          detailsEl.dataset.loaded = "0";
           await refreshValidationDashboardCounts();
           await loadValidationDayDetails(detailsEl);
         } catch {
@@ -829,7 +945,7 @@ async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
   } catch (e: unknown) {
     body.innerHTML = `<div class="muted">Błąd: ${escapeHtml(errorMessage(e))}</div>`;
   } finally {
-    detailsEl.dataset.loading = '0';
+    detailsEl.dataset.loading = "0";
   }
 }
 
@@ -844,28 +960,35 @@ async function ensureValidationMonthDefault() {
 }
 
 async function refreshValidation() {
-  setStatus(els.validationStatus, '');
+  setStatus(els.validationStatus, "");
   await ensureValidationMonthDefault();
   const month = els.validationMonth.value;
   if (!month) {
-    setStatus(els.validationStatus, 'Wybierz miesiąc.');
+    setStatus(els.validationStatus, "Wybierz miesiąc.");
     return;
   }
 
-  const openDayDates = Array.from(els.validationGroups.querySelectorAll('details.validation-day[open]'))
-    .map((d) => (d as HTMLDetailsElement).dataset.date ?? '')
+  const openDayDates = Array.from(
+    els.validationGroups.querySelectorAll("details.validation-day[open]"),
+  )
+    .map((d) => (d as HTMLDetailsElement).dataset.date ?? "")
     .filter(Boolean);
-  const openGroupKeys = Array.from(els.validationGroups.querySelectorAll('details.validation-group[open]'))
-    .map((d) => (d as HTMLDetailsElement).dataset.key ?? '')
+  const openGroupKeys = Array.from(
+    els.validationGroups.querySelectorAll("details.validation-group[open]"),
+  )
+    .map((d) => (d as HTMLDetailsElement).dataset.key ?? "")
     .filter(Boolean);
 
-  setStatus(els.validationStatus, 'Ładowanie...');
-  els.validationGroups.innerHTML = '';
-  els.validationMeta.textContent = '';
+  setStatus(els.validationStatus, "Ładowanie...");
+  els.validationGroups.innerHTML = "";
+  els.validationMeta.textContent = "";
   setBusy(true);
 
   try {
-    const [dash, res] = await Promise.all([window.api.getValidationDashboard(month), window.api.getValidationGroups(month)]);
+    const [dash, res] = await Promise.all([
+      window.api.getValidationDashboard(month),
+      window.api.getValidationGroups(month),
+    ]);
     els.validationMeta.textContent = `Zakres: ${res.range.start} → ${res.range.end} | Grupy: ${res.groups.length} | Odchylenia: ↑${dash.stats.outliersHigh} ↓${dash.stats.outliersLow} | Single: ${dash.stats.singles} | Ręcznie: ${dash.stats.verifiedManual}`;
 
     const dashboardHtml = `
@@ -900,9 +1023,9 @@ async function refreshValidation() {
                     <summary>
                       <span class="day-count" data-date="${escapeHtml(d.date)}">${d.total}</span>
                       <span class="mrn-code">${escapeHtml(d.date)}</span>
-                      <span class="badge rounded-pill badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="low" data-zero="${d.outliersLow ? '0' : '1'}">↓ ${d.outliersLow}</span>
-                      <span class="badge rounded-pill badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="high" data-zero="${d.outliersHigh ? '0' : '1'}">↑ ${d.outliersHigh}</span>
-                      <span class="badge rounded-pill badge-slate day-badge" data-date="${escapeHtml(d.date)}" data-field="singles" data-zero="${d.singles ? '0' : '1'}">1x ${d.singles}</span>
+                      <span class="badge rounded-pill badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="low" data-zero="${d.outliersLow ? "0" : "1"}">↓ ${d.outliersLow}</span>
+                      <span class="badge rounded-pill badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="high" data-zero="${d.outliersHigh ? "0" : "1"}">↑ ${d.outliersHigh}</span>
+                      <span class="badge rounded-pill badge-slate day-badge" data-date="${escapeHtml(d.date)}" data-field="singles" data-zero="${d.singles ? "0" : "1"}">1x ${d.singles}</span>
                     </summary>
                     <div class="accordion-body">
                       <div class="muted">Otwórz, aby załadować paczkę.</div>
@@ -910,7 +1033,7 @@ async function refreshValidation() {
                   </details>
                 `,
               )
-              .join('')
+              .join("")
       }
       <div class="section-title">Grupy</div>
     `;
@@ -922,16 +1045,16 @@ async function refreshValidation() {
             .slice(0, 1000)
             .map((g) => {
               const titleParts = [
-                g.key.odbiorca || '-',
-                g.key.kod_towaru ? `kod:${g.key.kod_towaru}` : '',
-                g.key.waluta ? `wal:${g.key.waluta}` : '',
+                g.key.odbiorca || "-",
+                g.key.kod_towaru ? `kod:${g.key.kod_towaru}` : "",
+                g.key.waluta ? `wal:${g.key.waluta}` : "",
               ].filter(Boolean);
-              const title = titleParts.join(' | ');
+              const title = titleParts.join(" | ");
               const keyEncoded = encodeKey(g.key);
               return `
                 <details class="accordion validation-group" data-key="${escapeHtml(keyEncoded)}">
                   <summary>
-                    <span class="mrn-code" title="${escapeHtml(title)}">${escapeHtml(title || '-')}</span>
+                    <span class="mrn-code" title="${escapeHtml(title)}">${escapeHtml(title || "-")}</span>
                     <span class="badge rounded-pill badge-count">${g.count}</span>
                   </summary>
                   <div class="accordion-body">
@@ -940,31 +1063,36 @@ async function refreshValidation() {
                 </details>
               `;
             })
-            .join('');
+            .join("");
 
     els.validationGroups.innerHTML = `${dashboardHtml}${groupsHtml}`;
 
-    for (const el of Array.from(els.validationGroups.querySelectorAll('details.accordion'))) {
+    for (const el of Array.from(
+      els.validationGroups.querySelectorAll("details.accordion"),
+    )) {
       const d = el as HTMLDetailsElement;
-      d.addEventListener('toggle', () => {
+      d.addEventListener("toggle", () => {
         if (!d.open) return;
-        if (d.classList.contains('validation-day')) void loadValidationDayDetails(d);
+        if (d.classList.contains("validation-day"))
+          void loadValidationDayDetails(d);
         else void loadValidationGroupDetails(d);
       });
     }
 
-    for (const el of Array.from(els.validationGroups.querySelectorAll('.day-badge'))) {
+    for (const el of Array.from(
+      els.validationGroups.querySelectorAll(".day-badge"),
+    )) {
       const badge = el as HTMLElement;
-      badge.addEventListener('click', (e) => {
-        const details = badge.closest('details') as HTMLDetailsElement | null;
+      badge.addEventListener("click", (e) => {
+        const details = badge.closest("details") as HTMLDetailsElement | null;
         if (!details) return;
-        const field = badge.dataset.field ?? '';
-        let filter: ValidationDayFilter = 'all';
-        if (field === 'high') filter = 'outliersHigh';
-        else if (field === 'low') filter = 'outliersLow';
-        else if (field === 'singles') filter = 'singles';
+        const field = badge.dataset.field ?? "";
+        let filter: ValidationDayFilter = "all";
+        if (field === "high") filter = "outliersHigh";
+        else if (field === "low") filter = "outliersLow";
+        else if (field === "singles") filter = "singles";
         details.dataset.filter = filter;
-        details.dataset.loaded = '0';
+        details.dataset.loaded = "0";
         if (details.open) {
           e.stopPropagation();
           void loadValidationDayDetails(details);
@@ -973,22 +1101,26 @@ async function refreshValidation() {
     }
 
     const openDaySet = new Set(openDayDates);
-    for (const el of Array.from(els.validationGroups.querySelectorAll('details.validation-day'))) {
+    for (const el of Array.from(
+      els.validationGroups.querySelectorAll("details.validation-day"),
+    )) {
       const d = el as HTMLDetailsElement;
-      if (!openDaySet.has(d.dataset.date ?? '')) continue;
+      if (!openDaySet.has(d.dataset.date ?? "")) continue;
       d.open = true;
       void loadValidationDayDetails(d);
     }
 
     const openGroupSet = new Set(openGroupKeys);
-    for (const el of Array.from(els.validationGroups.querySelectorAll('details.validation-group'))) {
+    for (const el of Array.from(
+      els.validationGroups.querySelectorAll("details.validation-group"),
+    )) {
       const d = el as HTMLDetailsElement;
-      if (!openGroupSet.has(d.dataset.key ?? '')) continue;
+      if (!openGroupSet.has(d.dataset.key ?? "")) continue;
       d.open = true;
       void loadValidationGroupDetails(d);
     }
 
-    setStatus(els.validationStatus, '');
+    setStatus(els.validationStatus, "");
   } catch (e: unknown) {
     setStatus(els.validationStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
@@ -998,26 +1130,32 @@ async function refreshValidation() {
 
 async function importRaport() {
   els.importBtn.disabled = true;
-  setStatus(els.importStatus, 'Importowanie…');
-  setStatus(els.previewStatus, '');
+  setStatus(els.importStatus, "Importowanie…");
+  setStatus(els.previewStatus, "");
   els.importProgress.value = 0;
-  setStatus(els.importProgressText, '');
+  setStatus(els.importProgressText, "");
   setBusy(true);
 
   const unsubscribe = window.api.onImportProgress((p) => {
-    const percent = p.total > 0 ? Math.max(0, Math.min(100, Math.round((p.current / p.total) * 100))) : 0;
-    els.importProgress.value = p.stage === 'done' ? 100 : percent;
-    const counter = p.total > 0 ? ` (${p.current}/${p.total})` : '';
+    const percent =
+      p.total > 0
+        ? Math.max(0, Math.min(100, Math.round((p.current / p.total) * 100)))
+        : 0;
+    els.importProgress.value = p.stage === "done" ? 100 : percent;
+    const counter = p.total > 0 ? ` (${p.current}/${p.total})` : "";
     setStatus(els.importProgressText, `${p.message}${counter}`);
   });
 
   try {
     const res = await window.api.importRaport();
     if (!res.sourceFile) {
-      setStatus(els.importStatus, 'Anulowano wybór pliku.');
+      setStatus(els.importStatus, "Anulowano wybór pliku.");
       return;
     }
-    setStatus(els.importStatus, `OK: zaimportowano ${res.rowCount} wierszy z pliku: ${res.sourceFile}`);
+    setStatus(
+      els.importStatus,
+      `OK: zaimportowano ${res.rowCount} wierszy z pliku: ${res.sourceFile}`,
+    );
     state.page = 1;
     await refreshMeta();
   } catch (e: unknown) {
@@ -1030,20 +1168,22 @@ async function importRaport() {
 }
 
 async function clearData() {
-  const ok = window.confirm('Na pewno wyczyścić wszystkie dane z bazy? Tej operacji nie można cofnąć.');
+  const ok = window.confirm(
+    "Na pewno wyczyścić wszystkie dane z bazy? Tej operacji nie można cofnąć.",
+  );
   if (!ok) return;
 
   els.btnClear.disabled = true;
-  setStatus(els.settingsStatus, 'Czyszczenie danych…');
+  setStatus(els.settingsStatus, "Czyszczenie danych…");
   setBusy(true);
 
   try {
     await window.api.clearRaport();
-    setStatus(els.settingsStatus, 'OK: dane zostały wyczyszczone.');
+    setStatus(els.settingsStatus, "OK: dane zostały wyczyszczone.");
     state.page = 1;
     state.total = 0;
     await refreshMeta();
-    if (state.tab === 'preview') await refreshPreview();
+    if (state.tab === "preview") await refreshPreview();
   } catch (e: unknown) {
     setStatus(els.settingsStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
@@ -1052,42 +1192,45 @@ async function clearData() {
   }
 }
 
-els.tabImportBtn.addEventListener('click', () => setTab('import'));
-els.tabPreviewBtn.addEventListener('click', () => setTab('preview'));
-els.tabDashboardBtn.addEventListener('click', () => setTab('dashboard'));
-els.tabValidationBtn.addEventListener('click', () => setTab('validation'));
-els.tabSettingsBtn.addEventListener('click', () => setTab('settings'));
+els.tabImportBtn.addEventListener("click", () => setTab("import"));
+els.tabPreviewBtn.addEventListener("click", () => setTab("preview"));
+els.tabDashboardBtn.addEventListener("click", () => setTab("dashboard"));
+els.tabValidationBtn.addEventListener("click", () => setTab("validation"));
+els.tabSettingsBtn.addEventListener("click", () => setTab("settings"));
 
-els.importBtn.addEventListener('click', () => void importRaport());
+els.importBtn.addEventListener("click", () => void importRaport());
 
-els.btnPrev.addEventListener('click', () => {
+els.btnPrev.addEventListener("click", () => {
   state.page = Math.max(1, state.page - 1);
   void refreshPreview();
 });
-els.btnNext.addEventListener('click', () => {
+els.btnNext.addEventListener("click", () => {
   state.page = state.page + 1;
   void refreshPreview();
 });
-els.btnRefresh.addEventListener('click', () => void refreshPreview());
-els.pageSize.addEventListener('change', () => {
+els.btnRefresh.addEventListener("click", () => void refreshPreview());
+els.pageSize.addEventListener("change", () => {
   const v = Number(els.pageSize.value);
   state.pageSize = Number.isFinite(v) && v > 0 ? v : 250;
   state.page = 1;
   void refreshPreview();
 });
 
-els.btnShowDb.addEventListener('click', () => void window.api.showDbInFolder().catch(() => {}));
-els.btnClear.addEventListener('click', () => void clearData());
+els.btnShowDb.addEventListener(
+  "click",
+  () => void window.api.showDbInFolder().catch(() => {}),
+);
+els.btnClear.addEventListener("click", () => void clearData());
 
-els.btnMrnRefresh.addEventListener('click', () => void refreshDashboard());
-els.btnMrnRebuild.addEventListener('click', async () => {
+els.btnMrnRefresh.addEventListener("click", () => void refreshDashboard());
+els.btnMrnRebuild.addEventListener("click", async () => {
   els.btnMrnRebuild.disabled = true;
-  setStatus(els.dashboardStatus, 'Skanowanie...');
+  setStatus(els.dashboardStatus, "Skanowanie...");
   setBusy(true);
   try {
     await window.api.rebuildMrnBatch();
     await refreshDashboard();
-    setStatus(els.dashboardStatus, 'Gotowe.');
+    setStatus(els.dashboardStatus, "Gotowe.");
   } catch (e: unknown) {
     setStatus(els.dashboardStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
@@ -1096,8 +1239,11 @@ els.btnMrnRebuild.addEventListener('click', async () => {
   }
 });
 
-els.btnValidationRefresh.addEventListener('click', () => void refreshValidation());
-els.validationMonth.addEventListener('change', () => void refreshValidation());
+els.btnValidationRefresh.addEventListener(
+  "click",
+  () => void refreshValidation(),
+);
+els.validationMonth.addEventListener("change", () => void refreshValidation());
 
 if (!updateStatusUnsub) {
   updateStatusUnsub = window.api.onUpdateStatus((s) => {
