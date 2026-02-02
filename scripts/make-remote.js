@@ -188,7 +188,7 @@ async function main() {
   if (!exe) throw new Error('Could not find Setup.exe in out/make');
 
   const rawBase = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${branch}`;
-  const manifestUrl = `${rawBase}/client/releases/latest.json`;
+  const manifestUrl = `${rawBase}/releases/latest.json`;
   const tag = `v${version}`;
   const exeName = path.basename(exe);
   const downloadUrl = `https://github.com/${gh.owner}/${gh.repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(exeName)}`;
