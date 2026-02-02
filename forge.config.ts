@@ -7,12 +7,15 @@ import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-nati
 import { WebpackPlugin } from '@electron-forge/plugin-webpack';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import * as path from 'path';
 
 import { mainConfig } from './webpack.main.config';
 import { rendererConfig } from './webpack.renderer.config';
 
 const config: ForgeConfig = {
   packagerConfig: {
+    icon: path.resolve(__dirname, 'resources', 'icon.ico'),
+    extraResource: [path.resolve(__dirname, 'resources')],
     asar: {
       unpack:
         '{**/*.node,**/.prisma/**,**/node_modules/.prisma/**,**/node_modules/@prisma/**}',
@@ -20,7 +23,7 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    new MakerSquirrel({}),
+    new MakerSquirrel({ setupIcon: path.resolve(__dirname, 'resources', 'icon.ico') }),
     new MakerZIP({}, ['darwin']),
     new MakerRpm({}),
     new MakerDeb({}),

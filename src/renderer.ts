@@ -1,3 +1,4 @@
+import 'bootstrap/dist/css/bootstrap.min.css';
 import './index.css';
 import { RAPORT_COLUMNS } from './raportColumns';
 
@@ -57,6 +58,13 @@ const state = {
   total: 0,
   columns: [] as Array<{ field: string; label: string }>,
 };
+
+let busyCount = 0;
+function setBusy(isBusy: boolean) {
+  if (isBusy) busyCount += 1;
+  else busyCount = Math.max(0, busyCount - 1);
+  document.body.classList.toggle('is-busy', busyCount > 0);
+}
 
 function setStatus(el: HTMLElement, text: string) {
   el.textContent = text;
@@ -153,6 +161,7 @@ function updatePagination() {
 
 async function refreshPreview() {
   setStatus(els.previewStatus, 'Ładowanie danych…');
+  setBusy(true);
   await refreshMeta();
 
   try {
@@ -164,17 +173,22 @@ async function refreshPreview() {
     setStatus(els.previewStatus, page.total === 0 ? 'Brak danych do wyświetlenia.' : '');
   } catch (e: unknown) {
     setStatus(els.previewStatus, `Błąd: ${errorMessage(e)}`);
+  } finally {
+    setBusy(false);
   }
 }
 
 async function refreshSettings() {
   setStatus(els.settingsStatus, '');
+  setBusy(true);
   try {
     const db = await window.api.getDbInfo();
     els.dbPath.textContent = db.filePath + (db.exists ? '' : ' (nie utworzono)');
   } catch (e: unknown) {
     els.dbPath.textContent = '—';
     setStatus(els.settingsStatus, `Błąd: ${errorMessage(e)}`);
+  } finally {
+    setBusy(false);
   }
 }
 
@@ -238,7 +252,7 @@ function renderRowKv(row: Record<string, string | null>): string {
     );
   }
 
-  if (parts.length === 0) return `<div class="muted">No data.</div>`;
+  if (parts.length === 0) return `<div class="muted">Brak danych.</div>`;
   return `<div class="kv-grid">${parts.join('')}</div>`;
 }
 
@@ -252,7 +266,7 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
   if (!body) return;
 
   detailsEl.dataset.loading = '1';
-  body.innerHTML = `<div class="muted">Loading...</div>`;
+  body.innerHTML = `<div class="muted">Ładowanie...</div>`;
 
   try {
     const res = await window.api.getMrnBatchRows(numerMrn);
@@ -263,7 +277,7 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
 
     const rowsHtml =
       rows.length === 0
-        ? `<div class="muted">No rows.</div>`
+        ? `<div class="muted">Brak wierszy.</div>`
         : rows
             .map((row) => {
               const rowNumber = row.rowNumber ? String(row.rowNumber) : '-';
@@ -296,25 +310,26 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
     `;
     detailsEl.dataset.loaded = '1';
   } catch (e: unknown) {
-    body.innerHTML = `<div class="muted">Error: ${escapeHtml(errorMessage(e))}</div>`;
+    body.innerHTML = `<div class="muted">Błąd: ${escapeHtml(errorMessage(e))}</div>`;
   } finally {
     detailsEl.dataset.loading = '0';
   }
 }
 
 async function refreshDashboard() {
-  setStatus(els.dashboardStatus, 'Loading...');
+  setStatus(els.dashboardStatus, 'Ładowanie...');
   els.mrnGroups.innerHTML = '';
   els.mrnMeta.textContent = '';
+  setBusy(true);
 
   try {
     const [meta, groups] = await Promise.all([window.api.getMrnBatchMeta(), window.api.getMrnBatchGroups(1000)]);
 
     const scanned = meta.scannedAt ? formatMaybeDate(meta.scannedAt) : '-';
-    els.mrnMeta.textContent = `Scan: ${scanned} | Groups: ${meta.groups} | Rows: ${meta.rows}`;
+    els.mrnMeta.textContent = `Skan: ${scanned} | Grupy: ${meta.groups} | Wiersze: ${meta.rows}`;
 
     if (groups.length === 0) {
-      els.mrnGroups.innerHTML = `<div class="muted" style="padding:10px 12px;">No duplicates. Click Scan to build mrn_batch.</div>`;
+      els.mrnGroups.innerHTML = `<div class="muted" style="padding:10px 12px;">Brak duplikatów. Kliknij „Skanuj”, aby zbudować mrn_batch.</div>`;
       setStatus(els.dashboardStatus, '');
       return;
     }
@@ -325,10 +340,10 @@ async function refreshDashboard() {
           <details class="accordion" data-mrn="${escapeHtml(g.numer_mrn)}">
             <summary>
               <span class="mrn-code" title="${escapeHtml(g.numer_mrn)}">${escapeHtml(g.numer_mrn)}</span>
-              <span class="badge">${g.count}</span>
+              <span class="badge rounded-pill badge-count">${g.count}</span>
             </summary>
             <div class="accordion-body">
-              <div class="muted">Open to load details.</div>
+              <div class="muted">Otwórz, aby załadować szczegóły.</div>
             </div>
           </details>
         `,
@@ -344,7 +359,9 @@ async function refreshDashboard() {
 
     setStatus(els.dashboardStatus, '');
   } catch (e: unknown) {
-    setStatus(els.dashboardStatus, `Error: ${errorMessage(e)}`);
+    setStatus(els.dashboardStatus, `Błąd: ${errorMessage(e)}`);
+  } finally {
+    setBusy(false);
   }
 }
 
@@ -455,7 +472,7 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
   if (!body) return;
 
   detailsEl.dataset.loading = '1';
-  body.innerHTML = `<div class="muted">Loading...</div>`;
+  body.innerHTML = `<div class="muted">Ładowanie...</div>`;
 
   try {
     const res = await window.api.getValidationItems(month, key);
@@ -475,7 +492,7 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
 
     const rows =
       items.length === 0
-        ? `<div class="muted">No items.</div>`
+        ? `<div class="muted">Brak pozycji.</div>`
         : `
           <table class="mini-table">
             <thead>
@@ -535,7 +552,7 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
       });
     }
   } catch (e: unknown) {
-    body.innerHTML = `<div class="muted">Error: ${escapeHtml(errorMessage(e))}</div>`;
+    body.innerHTML = `<div class="muted">Błąd: ${escapeHtml(errorMessage(e))}</div>`;
   } finally {
     detailsEl.dataset.loading = '0';
   }
@@ -554,17 +571,17 @@ async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
   const filter = (detailsEl.dataset.filter as ValidationDayFilter) ?? 'all';
 
   detailsEl.dataset.loading = '1';
-  body.innerHTML = `<div class="muted">Loading...</div>`;
+  body.innerHTML = `<div class="muted">Ładowanie...</div>`;
 
   try {
     const res = await window.api.getValidationDayItems(month, date, filter);
 
     const btn = (f: ValidationDayFilter, label: string) =>
-      `<button class="ghost btn-small${filter === f ? ' active' : ''}" data-filter="${escapeHtml(f)}">${escapeHtml(label)}</button>`;
+      `<button class="btn btn-outline-light btn-sm btn-filter${filter === f ? ' active' : ''}" data-filter="${escapeHtml(f)}">${escapeHtml(label)}</button>`;
 
     const filters = `
       <div class="day-filters">
-        ${btn('all', `All (${res.totals.all})`)}
+        ${btn('all', `Wszystkie (${res.totals.all})`)}
         ${btn('outliersHigh', `↑ (${res.totals.outliersHigh})`)}
         ${btn('outliersLow', `↓ (${res.totals.outliersLow})`)}
         ${btn('singles', `single (${res.totals.singles})`)}
@@ -573,7 +590,7 @@ async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
 
     const rows =
       res.items.length === 0
-        ? `<div class="muted">No items.</div>`
+        ? `<div class="muted">Brak pozycji.</div>`
         : `
           <table class="mini-table">
             <thead>
@@ -649,7 +666,7 @@ async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
       });
     }
   } catch (e: unknown) {
-    body.innerHTML = `<div class="muted">Error: ${escapeHtml(errorMessage(e))}</div>`;
+    body.innerHTML = `<div class="muted">Błąd: ${escapeHtml(errorMessage(e))}</div>`;
   } finally {
     detailsEl.dataset.loading = '0';
   }
@@ -670,7 +687,7 @@ async function refreshValidation() {
   await ensureValidationMonthDefault();
   const month = els.validationMonth.value;
   if (!month) {
-    setStatus(els.validationStatus, 'Select month.');
+    setStatus(els.validationStatus, 'Wybierz miesiąc.');
     return;
   }
 
@@ -681,38 +698,39 @@ async function refreshValidation() {
     .map((d) => (d as HTMLDetailsElement).dataset.key ?? '')
     .filter(Boolean);
 
-  setStatus(els.validationStatus, 'Loading...');
+  setStatus(els.validationStatus, 'Ładowanie...');
   els.validationGroups.innerHTML = '';
   els.validationMeta.textContent = '';
+  setBusy(true);
 
   try {
     const [dash, res] = await Promise.all([window.api.getValidationDashboard(month), window.api.getValidationGroups(month)]);
-    els.validationMeta.textContent = `Range: ${res.range.start} -> ${res.range.end} | Groups: ${res.groups.length} | Outliers: ↑${dash.stats.outliersHigh} ↓${dash.stats.outliersLow} | Singles: ${dash.stats.singles} | Manual: ${dash.stats.verifiedManual}`;
+    els.validationMeta.textContent = `Zakres: ${res.range.start} → ${res.range.end} | Grupy: ${res.groups.length} | Odchylenia: ↑${dash.stats.outliersHigh} ↓${dash.stats.outliersLow} | Single: ${dash.stats.singles} | Ręcznie: ${dash.stats.verifiedManual}`;
 
     const dashboardHtml = `
-      <div class="section-title">Dashboard</div>
+      <div class="section-title">Podsumowanie</div>
       <div class="dash-summary">
         <div class="dash-card">
-          <div class="dash-label">Outliers ↑</div>
+          <div class="dash-label">Odchylenia ↑</div>
           <div id="validation-stat-high" class="dash-value">${dash.stats.outliersHigh}</div>
         </div>
         <div class="dash-card">
-          <div class="dash-label">Outliers ↓</div>
+          <div class="dash-label">Odchylenia ↓</div>
           <div id="validation-stat-low" class="dash-value">${dash.stats.outliersLow}</div>
         </div>
         <div class="dash-card">
-          <div class="dash-label">Singles</div>
+          <div class="dash-label">Single</div>
           <div id="validation-stat-singles" class="dash-value">${dash.stats.singles}</div>
         </div>
         <div class="dash-card">
-          <div class="dash-label">Manual</div>
+          <div class="dash-label">Ręcznie</div>
           <div id="validation-stat-manual" class="dash-value">${dash.stats.verifiedManual}</div>
         </div>
       </div>
-      <div class="section-title">Days</div>
+      <div class="section-title">Dni</div>
       ${
         dash.days.length === 0
-          ? `<div class="muted" style="padding:6px 2px 10px;">No days.</div>`
+          ? `<div class="muted" style="padding:6px 2px 10px;">Brak dni.</div>`
           : dash.days
               .slice(0, 5000)
               .map(
@@ -721,24 +739,24 @@ async function refreshValidation() {
                     <summary>
                       <span class="day-count" data-date="${escapeHtml(d.date)}">${d.total}</span>
                       <span class="mrn-code">${escapeHtml(d.date)}</span>
-                      <span class="badge badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="low" data-zero="${d.outliersLow ? '0' : '1'}">↓ ${d.outliersLow}</span>
-                      <span class="badge badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="high" data-zero="${d.outliersHigh ? '0' : '1'}">↑ ${d.outliersHigh}</span>
-                      <span class="badge badge-slate day-badge" data-date="${escapeHtml(d.date)}" data-field="singles" data-zero="${d.singles ? '0' : '1'}">1x ${d.singles}</span>
+                      <span class="badge rounded-pill badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="low" data-zero="${d.outliersLow ? '0' : '1'}">↓ ${d.outliersLow}</span>
+                      <span class="badge rounded-pill badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="high" data-zero="${d.outliersHigh ? '0' : '1'}">↑ ${d.outliersHigh}</span>
+                      <span class="badge rounded-pill badge-slate day-badge" data-date="${escapeHtml(d.date)}" data-field="singles" data-zero="${d.singles ? '0' : '1'}">1x ${d.singles}</span>
                     </summary>
                     <div class="accordion-body">
-                      <div class="muted">Open to load batch.</div>
+                      <div class="muted">Otwórz, aby załadować paczkę.</div>
                     </div>
                   </details>
                 `,
               )
               .join('')
       }
-      <div class="section-title">Groups</div>
+      <div class="section-title">Grupy</div>
     `;
 
     const groupsHtml =
       res.groups.length === 0
-        ? `<div class="muted" style="padding:6px 2px 10px;">No groups in this month.</div>`
+        ? `<div class="muted" style="padding:6px 2px 10px;">Brak grup w tym miesiącu.</div>`
         : res.groups
             .slice(0, 1000)
             .map((g) => {
@@ -753,10 +771,10 @@ async function refreshValidation() {
                 <details class="accordion validation-group" data-key="${escapeHtml(keyEncoded)}">
                   <summary>
                     <span class="mrn-code" title="${escapeHtml(title)}">${escapeHtml(title || '-')}</span>
-                    <span class="badge">${g.count}</span>
+                    <span class="badge rounded-pill badge-count">${g.count}</span>
                   </summary>
                   <div class="accordion-body">
-                    <div class="muted">Open to load details.</div>
+                    <div class="muted">Otwórz, aby załadować szczegóły.</div>
                   </div>
                 </details>
               `;
@@ -811,7 +829,9 @@ async function refreshValidation() {
 
     setStatus(els.validationStatus, '');
   } catch (e: unknown) {
-    setStatus(els.validationStatus, `Error: ${errorMessage(e)}`);
+    setStatus(els.validationStatus, `Błąd: ${errorMessage(e)}`);
+  } finally {
+    setBusy(false);
   }
 }
 
@@ -821,6 +841,7 @@ async function importRaport() {
   setStatus(els.previewStatus, '');
   els.importProgress.value = 0;
   setStatus(els.importProgressText, '');
+  setBusy(true);
 
   const unsubscribe = window.api.onImportProgress((p) => {
     const percent = p.total > 0 ? Math.max(0, Math.min(100, Math.round((p.current / p.total) * 100))) : 0;
@@ -843,6 +864,7 @@ async function importRaport() {
   } finally {
     unsubscribe();
     els.importBtn.disabled = false;
+    setBusy(false);
   }
 }
 
@@ -852,6 +874,7 @@ async function clearData() {
 
   els.btnClear.disabled = true;
   setStatus(els.settingsStatus, 'Czyszczenie danych…');
+  setBusy(true);
 
   try {
     await window.api.clearRaport();
@@ -864,6 +887,7 @@ async function clearData() {
     setStatus(els.settingsStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
     els.btnClear.disabled = false;
+    setBusy(false);
   }
 }
 
@@ -897,15 +921,17 @@ els.btnClear.addEventListener('click', () => void clearData());
 els.btnMrnRefresh.addEventListener('click', () => void refreshDashboard());
 els.btnMrnRebuild.addEventListener('click', async () => {
   els.btnMrnRebuild.disabled = true;
-  setStatus(els.dashboardStatus, 'Scanning...');
+  setStatus(els.dashboardStatus, 'Skanowanie...');
+  setBusy(true);
   try {
     await window.api.rebuildMrnBatch();
     await refreshDashboard();
-    setStatus(els.dashboardStatus, 'OK.');
+    setStatus(els.dashboardStatus, 'Gotowe.');
   } catch (e: unknown) {
-    setStatus(els.dashboardStatus, `Error: ${errorMessage(e)}`);
+    setStatus(els.dashboardStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
     els.btnMrnRebuild.disabled = false;
+    setBusy(false);
   }
 });
 

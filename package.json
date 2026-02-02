@@ -49,6 +49,7 @@
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.3.0",
     "@prisma/client": "^7.3.0",
+    "bootstrap": "^5.3.3",
     "electron-squirrel-startup": "^1.0.1",
     "xlsx": "^0.18.5"
   }

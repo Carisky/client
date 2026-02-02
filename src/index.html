@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html data-bs-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <title>Raport SAD</title>
@@ -11,55 +11,99 @@
         <div id="meta" class="app-meta">Brak zaimportowanych danych</div>
       </header>
 
-      <nav class="tabs" role="tablist" aria-label="Nawigacja">
-        <button id="tab-btn-import" class="tab active" role="tab" aria-selected="true">
+      <nav class="tabs nav nav-pills" role="tablist" aria-label="Nawigacja">
+        <button id="tab-btn-import" class="tab nav-link active" role="tab" aria-selected="true">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v10m0 0l4-4m-4 4l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
           Import
         </button>
-        <button id="tab-btn-preview" class="tab" role="tab" aria-selected="false">
+        <button id="tab-btn-preview" class="tab nav-link" role="tab" aria-selected="false">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2" />
+          </svg>
           Podgląd
         </button>
-        <button id="tab-btn-dashboard" class="tab" role="tab" aria-selected="false">
+        <button id="tab-btn-dashboard" class="tab nav-link" role="tab" aria-selected="false">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <path d="M9 7v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+          </svg>
           Duplikaty MRN
         </button>
-        <button id="tab-btn-validation" class="tab" role="tab" aria-selected="false">
+        <button id="tab-btn-validation" class="tab nav-link" role="tab" aria-selected="false">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 19V5m0 14h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <path d="M7 15l4-4 3 3 5-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
           Walidacja
         </button>
-        <button id="tab-btn-settings" class="tab" role="tab" aria-selected="false">
+        <button id="tab-btn-settings" class="tab nav-link" role="tab" aria-selected="false">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M19.4 15a1.8 1.8 0 0 0 .36 2l.05.05-1.7 2.94-.07-.02a1.8 1.8 0 0 0-2.07.78l-.03.06H10.1l-.03-.06a1.8 1.8 0 0 0-2.07-.78l-.07.02-1.7-2.94.05-.05a1.8 1.8 0 0 0 .36-2l-.02-.06-2.02-1.16V10.2l2.02-1.16.02-.06a1.8 1.8 0 0 0-.36-2l-.05-.05L7.95 3.99l.07.02a1.8 1.8 0 0 0 2.07-.78l.03-.06h3.76l.03.06a1.8 1.8 0 0 0 2.07.78l.07-.02 1.7 2.94-.05.05a1.8 1.8 0 0 0-.36 2l.02.06 2.02 1.16v3.28L19.4 15Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" opacity="0.9"/>
+          </svg>
           Ustawienia
         </button>
       </nav>
 
       <main class="content">
         <section id="tab-import" class="tab-panel">
-          <div class="card">
-            <h2>Import danych</h2>
-            <p class="muted">
-              Wybierz plik Excel i zaimportuj dane do wbudowanej bazy SQLite.
-            </p>
-            <button id="btn-import" class="primary">Importuj dane z pliku Excel…</button>
-            <div class="progress-wrap" aria-label="Postęp importu">
-              <progress id="import-progress" class="progress" value="0" max="100"></progress>
-              <div id="import-progress-text" class="progress-text"></div>
+          <div class="card card-narrow">
+            <div class="card-body">
+              <h2 class="h5 mb-2">Import danych</h2>
+              <p class="muted">
+                Wybierz plik Excel i zaimportuj dane do wbudowanej bazy SQLite.
+              </p>
+              <button id="btn-import" class="btn btn-primary">
+                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3v10m0 0l4-4m-4 4l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+                Importuj dane z pliku Excel…
+              </button>
+              <div class="progress-wrap" aria-label="Postęp importu">
+                <progress id="import-progress" class="import-progress" value="0" max="100"></progress>
+                <div id="import-progress-text" class="progress-text"></div>
+              </div>
+              <div id="import-status" class="status" aria-live="polite"></div>
             </div>
-            <div id="import-status" class="status" aria-live="polite"></div>
           </div>
         </section>
 
         <section id="tab-preview" class="tab-panel hidden">
           <div class="toolbar">
             <div class="pagination">
-              <button id="btn-prev" class="ghost">Poprzednia</button>
+              <button id="btn-prev" class="btn btn-outline-light btn-sm">
+                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                Poprzednia
+              </button>
               <div id="page-info" class="page-info">Strona 1</div>
-              <button id="btn-next" class="ghost">Następna</button>
+              <button id="btn-next" class="btn btn-outline-light btn-sm">
+                Następna
+                <svg class="ui-icon right" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
             </div>
 
             <div class="actions">
-              <select id="page-size" class="select" aria-label="Liczba wierszy na stronę">
+              <select id="page-size" class="form-select form-select-sm" aria-label="Liczba wierszy na stronę">
                 <option value="250" selected>250 / strona</option>
                 <option value="100">100 / strona</option>
                 <option value="50">50 / strona</option>
               </select>
-              <button id="btn-refresh" class="ghost">Odśwież</button>
+              <button id="btn-refresh" class="btn btn-outline-light btn-sm">
+                <svg class="ui-icon spin-on-busy" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                Odśwież
+              </button>
             </div>
           </div>
 
@@ -76,8 +120,21 @@
         <section id="tab-dashboard" class="tab-panel hidden">
           <div class="toolbar">
             <div class="actions">
-              <button id="btn-mrn-rebuild" class="primary">Skanuj i zapisz do mrn_batch</button>
-              <button id="btn-mrn-refresh" class="ghost">Odświeź</button>
+              <button id="btn-mrn-rebuild" class="btn btn-primary btn-sm">
+                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 4v6h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M20 20v-6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M20 9a8 8 0 0 0-14-3M4 15a8 8 0 0 0 14 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+                Skanuj i zapisz do mrn_batch
+              </button>
+              <button id="btn-mrn-refresh" class="btn btn-outline-light btn-sm">
+                <svg class="ui-icon spin-on-busy" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                Odśwież
+              </button>
             </div>
             <div id="mrn-meta" class="page-info"></div>
           </div>
@@ -90,8 +147,14 @@
           <div class="toolbar">
             <div class="actions">
               <label class="muted" for="validation-month" style="margin-right: 6px;">Miesiąc</label>
-              <input id="validation-month" class="select" type="month" />
-              <button id="btn-validation-refresh" class="ghost">Odśwież</button>
+              <input id="validation-month" class="form-control form-control-sm" type="month" />
+              <button id="btn-validation-refresh" class="btn btn-outline-light btn-sm">
+                <svg class="ui-icon spin-on-busy" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                Odśwież
+              </button>
             </div>
             <div id="validation-meta" class="page-info"></div>
           </div>
@@ -101,22 +164,37 @@
         </section>
 
         <section id="tab-settings" class="tab-panel hidden">
-          <div class="card">
-            <h2>Ustawienia</h2>
-            <div class="settings-row">
-              <div class="settings-label">Plik bazy danych</div>
-              <div id="db-path" class="settings-value">—</div>
-              <button id="btn-show-db" class="ghost">Pokaż w folderze</button>
-            </div>
-            <hr class="divider" />
-            <div class="settings-row">
-              <div class="settings-label">Dane</div>
-              <div class="settings-value muted">
-                Usuwa wszystkie zaimportowane wiersze z bazy.
+          <div class="card card-narrow">
+            <div class="card-body">
+              <h2 class="h5 mb-2">Ustawienia</h2>
+              <div class="settings-row">
+                <div class="settings-label">Plik bazy danych</div>
+                <div id="db-path" class="settings-value">—</div>
+                <button id="btn-show-db" class="btn btn-outline-light btn-sm">
+                  <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 7a2 2 0 0 1 2-2h5l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                  </svg>
+                  Pokaż w folderze
+                </button>
               </div>
-              <button id="btn-clear" class="danger">Wyczyść dane</button>
+              <hr class="divider" />
+              <div class="settings-row">
+                <div class="settings-label">Dane</div>
+                <div class="settings-value muted">
+                  Usuwa wszystkie zaimportowane wiersze z bazy.
+                </div>
+                <button id="btn-clear" class="btn btn-outline-danger btn-sm">
+                  <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <path d="M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <path d="M6 7l1 14h10l1-14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                    <path d="M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                  </svg>
+                  Wyczyść dane
+                </button>
+              </div>
+              <div id="settings-status" class="status" aria-live="polite"></div>
             </div>
-            <div id="settings-status" class="status" aria-live="polite"></div>
           </div>
         </section>
       </main>
