@@ -8,6 +8,8 @@ import type {
   RaportMeta,
   RaportPage,
   UpdateCheckResult,
+  UpdateStartResult,
+  UpdateStatus,
   ValidationDashboard,
   ValidationDayFilter,
   ValidationDayItems,
@@ -41,6 +43,8 @@ declare global {
 
       getAppVersion: () => Promise<{ version: string }>;
       checkForUpdates: () => Promise<UpdateCheckResult>;
+      onUpdateStatus: (handler: (s: UpdateStatus) => void) => () => void;
+      downloadAndInstallUpdate: (feedUrl: string) => Promise<UpdateStartResult>;
       openExternal: (url: string) => Promise<boolean>;
       quitApp: () => Promise<boolean>;
     };

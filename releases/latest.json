@@ -2,8 +2,9 @@
   "version": "1.0.1",
   "channel": "master",
   "publishedAt": "2026-02-02T11:24:26.660Z",
-  "downloadUrl": "https://github.com/Carisky/client/releases/download/v1.0.1/client-1.0.1%20Setup.exe",
-  "file": "client-1.0.1 Setup.exe",
+  "downloadUrl": "https://github.com/Carisky/client/releases/download/v1.0.1/client-1.0.1.Setup.exe",
+  "squirrelFeedUrl": "https://github.com/Carisky/client/releases/download/v1.0.1",
+  "file": "client-1.0.1.Setup.exe",
   "sha256": "33c40a413d197f8cd1be8bc7014a85a616db96e532505391fd64f7011a7c6461",
   "size": 146976256
 }

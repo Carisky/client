@@ -8,6 +8,7 @@ export type UpdateCheckResult = {
   currentVersion: string;
   latestVersion: string | null;
   downloadUrl: string | null;
+  squirrelFeedUrl: string | null;
   manifestUrl: string | null;
   error: string | null;
 };
@@ -101,9 +102,19 @@ async function fetchJson(url: string, timeoutMs: number): Promise<unknown> {
   }
 }
 
-function extractLatestInfo(payload: unknown): { version: string | null; downloadUrl: string | null } {
-  if (!payload || typeof payload !== 'object') return { version: null, downloadUrl: null };
-  const p = payload as { version?: unknown; downloadUrl?: unknown; url?: unknown; win32?: unknown; platforms?: unknown };
+function extractLatestInfo(payload: unknown): {
+  version: string | null;
+  downloadUrl: string | null;
+  squirrelFeedUrl: string | null;
+} {
+  if (!payload || typeof payload !== 'object') return { version: null, downloadUrl: null, squirrelFeedUrl: null };
+  const p = payload as {
+    version?: unknown;
+    downloadUrl?: unknown;
+    url?: unknown;
+    squirrelFeedUrl?: unknown;
+    feedUrl?: unknown;
+  };
 
   const version = typeof p.version === 'string' && p.version.trim() ? p.version.trim() : null;
 
@@ -111,7 +122,11 @@ function extractLatestInfo(payload: unknown): { version: string | null; download
     (typeof p.downloadUrl === 'string' && p.downloadUrl.trim() ? p.downloadUrl.trim() : null) ??
     (typeof p.url === 'string' && p.url.trim() ? p.url.trim() : null);
 
-  return { version, downloadUrl: dl };
+  const feed =
+    (typeof p.squirrelFeedUrl === 'string' && p.squirrelFeedUrl.trim() ? p.squirrelFeedUrl.trim() : null) ??
+    (typeof p.feedUrl === 'string' && p.feedUrl.trim() ? p.feedUrl.trim() : null);
+
+  return { version, downloadUrl: dl, squirrelFeedUrl: feed };
 }
 
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
@@ -125,6 +140,7 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
       currentVersion,
       latestVersion: null,
       downloadUrl: null,
+      squirrelFeedUrl: null,
       manifestUrl: null,
       error: 'Update manifest URL not configured.',
     };
@@ -135,7 +151,7 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
     // Avoid CDN caching issues (GitHub raw is heavily cached).
     u.searchParams.set('_ts', String(Date.now()));
     const payload = await fetchJson(u.toString(), 4500);
-    const { version: latestVersion, downloadUrl } = extractLatestInfo(payload);
+    const { version: latestVersion, downloadUrl, squirrelFeedUrl } = extractLatestInfo(payload);
     if (!latestVersion || !downloadUrl) {
       return {
         supported: true,
@@ -143,6 +159,7 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
         currentVersion,
         latestVersion: latestVersion ?? null,
         downloadUrl: downloadUrl ?? null,
+        squirrelFeedUrl: squirrelFeedUrl ?? null,
         manifestUrl,
         error: 'Invalid update manifest.',
       };
@@ -155,6 +172,7 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
       currentVersion,
       latestVersion,
       downloadUrl,
+      squirrelFeedUrl: squirrelFeedUrl ?? null,
       manifestUrl,
       error: null,
     };
@@ -166,6 +184,7 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
       currentVersion,
       latestVersion: null,
       downloadUrl: null,
+      squirrelFeedUrl: null,
       manifestUrl,
       error: msg,
     };

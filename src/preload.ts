@@ -109,9 +109,22 @@ export type UpdateCheckResult = {
   currentVersion: string;
   latestVersion: string | null;
   downloadUrl: string | null;
+  squirrelFeedUrl: string | null;
   manifestUrl: string | null;
   error: string | null;
 };
+
+export type UpdateStatus =
+  | { state: 'idle' }
+  | { state: 'checking'; message?: string }
+  | { state: 'available'; message?: string }
+  | { state: 'not-available'; message?: string }
+  | { state: 'downloading'; percent?: number; transferred?: number; total?: number; bytesPerSecond?: number }
+  | { state: 'downloaded'; message?: string }
+  | { state: 'installing'; message?: string }
+  | { state: 'error'; message: string };
+
+export type UpdateStartResult = { ok: boolean; error?: string };
 
 contextBridge.exposeInMainWorld('api', {
   onImportProgress: (handler: (p: ImportProgress) => void): (() => void) => {
@@ -145,6 +158,13 @@ contextBridge.exposeInMainWorld('api', {
 
   getAppVersion: (): Promise<{ version: string }> => ipcRenderer.invoke('app:version'),
   checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
+  onUpdateStatus: (handler: (s: UpdateStatus) => void): (() => void) => {
+    const listener = (_event: unknown, payload: UpdateStatus) => handler(payload);
+    ipcRenderer.on('updates:status', listener);
+    return () => ipcRenderer.removeListener('updates:status', listener);
+  },
+  downloadAndInstallUpdate: (feedUrl: string): Promise<UpdateStartResult> =>
+    ipcRenderer.invoke('updates:downloadAndInstall', { feedUrl }),
   openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('updates:open', { url }),
   quitApp: (): Promise<boolean> => ipcRenderer.invoke('app:quit'),
 });

@@ -17,6 +17,7 @@ import {
   setValidationManualVerified,
 } from './raportDb';
 import { checkForUpdates } from './appUpdate';
+import { startSquirrelUpdate } from './squirrelAutoUpdate';
 
 export function registerRaportIpc(): void {
   ipcMain.handle('raport:import', async (event) => {
@@ -80,6 +81,10 @@ export function registerRaportIpc(): void {
 
   ipcMain.handle('app:version', async () => ({ version: app.getVersion() }));
   ipcMain.handle('updates:check', async () => checkForUpdates());
+  ipcMain.handle('updates:downloadAndInstall', async (event, args: { feedUrl: string }) => {
+    const feedUrl = String(args?.feedUrl ?? '').trim();
+    return startSquirrelUpdate(feedUrl, event.sender);
+  });
   ipcMain.handle('updates:open', async (_evt, args: { url: string }) => {
     const url = String(args?.url ?? '').trim();
     if (!url) return false;

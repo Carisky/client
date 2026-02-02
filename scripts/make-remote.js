@@ -32,6 +32,26 @@ function getGithubToken() {
   return t || null;
 }
 
+function parseVersion(v) {
+  const s = String(v || '').trim();
+  const core = s.split('-')[0] || '';
+  return core
+    .split('.')
+    .slice(0, 3)
+    .map((x) => Number.parseInt(x, 10))
+    .map((n) => (Number.isFinite(n) && n >= 0 ? n : 0));
+}
+
+function compareVersions(a, b) {
+  const aa = parseVersion(a);
+  const bb = parseVersion(b);
+  for (let i = 0; i < 3; i++) {
+    const d = (aa[i] || 0) - (bb[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
 async function ghApi(url, { method = 'GET', token, headers = {}, body } = {}) {
   const res = await fetch(url, {
     method,
@@ -173,6 +193,22 @@ async function main() {
   // Ensure packaged app contains correct update config (extraResource is captured during packaging).
   writeJson(path.join(root, 'resources', 'update.json'), { manifestUrl });
 
+  // Guard: don't accidentally move "latest" backwards.
+  const latestPath = path.join(root, 'releases', 'latest.json');
+  if (fs.existsSync(latestPath) && !process.env.ALLOW_OLDER_RELEASE) {
+    try {
+      const latest = JSON.parse(fs.readFileSync(latestPath, 'utf8'));
+      const latestVersion = String(latest?.version ?? '').trim();
+      if (latestVersion && compareVersions(latestVersion, version) > 0) {
+        throw new Error(
+          `Refusing to publish v${version}: releases/latest.json is already v${latestVersion}. Set ALLOW_OLDER_RELEASE=1 to override.`,
+        );
+      }
+    } catch (e) {
+      if (e instanceof Error) throw e;
+    }
+  }
+
   const token = getGithubToken();
   if (!token) {
     throw new Error('Missing GitHub token. Set env var GITHUB_TOKEN (or GH_TOKEN) with "repo" scope to upload release assets.');
@@ -192,15 +228,24 @@ async function main() {
   const exe = files.find((p) => /\.exe$/i.test(p) && /setup/i.test(path.basename(p)));
   if (!exe) throw new Error('Could not find Setup.exe in out/make');
 
+  const squirrelFiles = files.filter((p) => /squirrel\.windows/i.test(p.replace(/\\/g, '/')));
+  const releasesFile = squirrelFiles.find((p) => path.basename(p) === 'RELEASES') ?? null;
+  const nupkgs = squirrelFiles.filter((p) => /\.nupkg$/i.test(p));
+  if (!releasesFile) throw new Error('Could not find Squirrel RELEASES file in out/make');
+  if (nupkgs.length === 0) throw new Error('Could not find any .nupkg files in out/make (required for Squirrel auto-update)');
+
   const tag = `v${version}`;
   const exeName = path.basename(exe);
-  const downloadUrl = `https://github.com/${gh.owner}/${gh.repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(exeName)}`;
+  const downloadBase = `https://github.com/${gh.owner}/${gh.repo}/releases/download/${encodeURIComponent(tag)}`;
+  const downloadUrl = `${downloadBase}/${encodeURIComponent(exeName)}`;
+  const squirrelFeedUrl = downloadBase;
 
   const manifest = {
     version,
     channel: branch,
     publishedAt: new Date().toISOString(),
     downloadUrl,
+    squirrelFeedUrl,
     file: exeName,
     sha256: sha256(exe),
     size: fs.statSync(exe).size,
@@ -210,7 +255,7 @@ async function main() {
   writeJson(path.join(root, 'releases', 'latest.json'), manifest);
 
   console.log(`Publishing manifests to branch "${branch}"...`);
-  execInherit('git add -A releases resources/update.json', { cwd: root });
+  execInherit(`git add releases/latest.json releases/v${version}/manifest.json resources/update.json`, { cwd: root });
 
   const status = exec('git status --porcelain', { cwd: root });
   if (!status) {
@@ -225,8 +270,13 @@ async function main() {
 
   console.log(`Creating GitHub release ${tag}...`);
   const rel = await getOrCreateRelease({ owner: gh.owner, repo: gh.repo, tag, token });
-  await deleteReleaseAssetByName({ owner: gh.owner, repo: gh.repo, releaseId: rel.id, name: exeName, token });
-  await uploadReleaseAsset({ uploadUrl: rel.upload_url, filePath: exe, token });
+
+  const assetPaths = [exe, releasesFile, ...nupkgs];
+  for (const p of assetPaths) {
+    const name = path.basename(p);
+    await deleteReleaseAssetByName({ owner: gh.owner, repo: gh.repo, releaseId: rel.id, name, token });
+    await uploadReleaseAsset({ uploadUrl: rel.upload_url, filePath: p, token });
+  }
 
   console.log(`Done. Manifest: ${manifestUrl}`);
 }

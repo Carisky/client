@@ -67,8 +67,65 @@ function setBusy(isBusy: boolean) {
 }
 
 let lastUpdateCheck: Awaited<ReturnType<typeof window.api.checkForUpdates>> | null = null;
+let lastUpdateStatus: unknown | null = null;
+let updateStatusUnsub: (() => void) | null = null;
+let updateFallbackUrl: string | null = null;
+let updatePrimaryBtn: HTMLButtonElement | null = null;
+let updateFallbackBtn: HTMLButtonElement | null = null;
 
-function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVersion: string) {
+function renderUpdateStatus(status: unknown) {
+  if (!document.getElementById('update-backdrop')) return;
+
+  const textEl = document.getElementById('update-status-text');
+  const barWrap = document.getElementById('update-progress-wrap');
+  const barEl = document.getElementById('update-progress-bar') as HTMLDivElement | null;
+  if (!textEl) return;
+
+  const s = (status ?? {}) as { state?: unknown; message?: unknown; percent?: unknown };
+  const state = typeof s.state === 'string' ? s.state : 'idle';
+  const msg = typeof s.message === 'string' ? s.message : '';
+  const pct = typeof s.percent === 'number' && Number.isFinite(s.percent) ? Math.max(0, Math.min(100, s.percent)) : null;
+
+  const label =
+    state === 'checking'
+      ? 'Проверяю обновление…'
+      : state === 'available'
+        ? 'Обновление найдено.'
+        : state === 'not-available'
+          ? 'Обновление недоступно.'
+          : state === 'downloading'
+            ? `Скачиваю…${pct == null ? '' : ` ${pct.toFixed(0)}%`}`
+            : state === 'downloaded'
+              ? 'Скачано. Устанавливаю…'
+              : state === 'installing'
+                ? 'Устанавливаю…'
+                : state === 'error'
+                  ? `Ошибка обновления: ${msg || 'unknown'}`
+                  : msg || '';
+
+  textEl.textContent = label;
+
+  if (barWrap && barEl) {
+    if (pct == null || state !== 'downloading') {
+      barWrap.classList.add('d-none');
+      barEl.style.width = '0%';
+    } else {
+      barWrap.classList.remove('d-none');
+      barEl.style.width = `${pct}%`;
+    }
+  }
+
+  if (updateFallbackBtn) {
+    const showFallback = state === 'error' || state === 'not-available';
+    updateFallbackBtn.classList.toggle('d-none', !showFallback || !updateFallbackUrl);
+  }
+  if (updatePrimaryBtn) {
+    const enable = state === 'idle' || state === 'error' || state === 'not-available';
+    updatePrimaryBtn.disabled = !enable;
+  }
+}
+
+function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVersion: string, feedUrl: string | null) {
   if (document.getElementById('update-backdrop')) return;
   document.body.classList.add('update-required');
 
@@ -76,11 +133,11 @@ function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVe
   el.id = 'update-backdrop';
   el.className = 'update-backdrop';
   el.innerHTML = `
-    <div class="update-card" role="dialog" aria-modal="true" aria-label="Wymagana aktualizacja">
+    <div class="update-card" role="dialog" aria-modal="true" aria-label="Требуется обновление">
       <div class="update-card-header">
         <div>
-          <div class="update-title">Wymagana aktualizacja</div>
-          <div class="update-sub">Twoja wersja: ${escapeHtml(currentVersion)} • Dostępna: ${escapeHtml(latestVersion)}</div>
+          <div class="update-title">Требуется обновление</div>
+          <div class="update-sub">Текущая версия: ${escapeHtml(currentVersion)} • Доступна: ${escapeHtml(latestVersion)}</div>
         </div>
         <div class="update-badge">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin:0">
@@ -91,10 +148,17 @@ function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVe
         </div>
       </div>
       <div class="update-card-body">
-        <div class="muted">Aby kontynuować, zainstaluj najnowszą wersję aplikacji.</div>
+        <div class="muted">Чтобы продолжить, установи последнюю версию приложения.</div>
+        <div id="update-status-text" class="muted" style="margin-top:8px"></div>
+        <div id="update-progress-wrap" class="progress d-none" style="height:8px; margin-top:8px">
+          <div id="update-progress-bar" class="progress-bar" role="progressbar" style="width:0%"></div>
+        </div>
         <div class="update-actions">
+          <button id="btn-update-download" class="btn btn-outline-light d-none">
+            Скачать установщик
+          </button>
           <button id="btn-update-now" class="btn btn-primary">
-            Zaktualizuj do wersji ${escapeHtml(latestVersion)}
+            Обновись до версии ${escapeHtml(latestVersion)}
           </button>
         </div>
       </div>
@@ -102,15 +166,41 @@ function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVe
   `;
   document.body.appendChild(el);
 
-  const btn = el.querySelector('#btn-update-now') as HTMLButtonElement | null;
-  btn?.addEventListener('click', async () => {
-    btn.disabled = true;
+  updateFallbackUrl = downloadUrl;
+  updatePrimaryBtn = el.querySelector('#btn-update-now') as HTMLButtonElement | null;
+  updateFallbackBtn = el.querySelector('#btn-update-download') as HTMLButtonElement | null;
+
+  updateFallbackBtn?.addEventListener('click', async () => {
+    if (!updateFallbackUrl) return;
+    updateFallbackBtn.disabled = true;
     try {
-      await window.api.openExternal(downloadUrl);
+      await window.api.openExternal(updateFallbackUrl);
     } finally {
       void window.api.quitApp();
     }
   });
+
+  updatePrimaryBtn?.addEventListener('click', async () => {
+    updatePrimaryBtn.disabled = true;
+    try {
+      if (feedUrl) {
+        const started = await window.api.downloadAndInstallUpdate(feedUrl);
+        if (!started.ok) {
+          renderUpdateStatus({ state: 'error', message: started.error ?? 'Failed to start updater' });
+          updateFallbackBtn?.classList.remove('d-none');
+        } else {
+          renderUpdateStatus({ state: 'checking' });
+        }
+      } else {
+        updateFallbackBtn?.classList.remove('d-none');
+        renderUpdateStatus({ state: 'error', message: 'Auto-update not available.' });
+      }
+    } finally {
+      // autoUpdater will quit+install; fallback button can quit the app
+    }
+  });
+
+  renderUpdateStatus(lastUpdateStatus);
 
   const stop = (e: Event) => e.preventDefault();
   window.addEventListener('keydown', stop, { capture: true });
@@ -123,7 +213,7 @@ async function checkForUpdatesAndBlock() {
     if (!res.supported) return;
     if (!res.updateAvailable) return;
     if (!res.latestVersion || !res.downloadUrl) return;
-    renderUpdateBlock(res.latestVersion, res.downloadUrl, res.currentVersion);
+    renderUpdateBlock(res.latestVersion, res.downloadUrl, res.currentVersion, res.squirrelFeedUrl);
   } catch {
     // ignore
   }
@@ -1008,6 +1098,13 @@ els.btnMrnRebuild.addEventListener('click', async () => {
 
 els.btnValidationRefresh.addEventListener('click', () => void refreshValidation());
 els.validationMonth.addEventListener('change', () => void refreshValidation());
+
+if (!updateStatusUnsub) {
+  updateStatusUnsub = window.api.onUpdateStatus((s) => {
+    lastUpdateStatus = s;
+    renderUpdateStatus(s);
+  });
+}
 
 void refreshMeta();
 void checkForUpdatesAndBlock();
