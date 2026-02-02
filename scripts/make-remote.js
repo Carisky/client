@@ -168,6 +168,11 @@ async function main() {
     throw new Error('Only GitHub origin URLs are supported for auto manifest URL. Set UPDATE_MANIFEST_URL in resources/update.json manually.');
   }
 
+  const rawBase = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${branch}`;
+  const manifestUrl = `${rawBase}/releases/latest.json`;
+  // Ensure packaged app contains correct update config (extraResource is captured during packaging).
+  writeJson(path.join(root, 'resources', 'update.json'), { manifestUrl });
+
   const token = getGithubToken();
   if (!token) {
     throw new Error('Missing GitHub token. Set env var GITHUB_TOKEN (or GH_TOKEN) with "repo" scope to upload release assets.');
@@ -187,8 +192,6 @@ async function main() {
   const exe = files.find((p) => /\.exe$/i.test(p) && /setup/i.test(path.basename(p)));
   if (!exe) throw new Error('Could not find Setup.exe in out/make');
 
-  const rawBase = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${branch}`;
-  const manifestUrl = `${rawBase}/releases/latest.json`;
   const tag = `v${version}`;
   const exeName = path.basename(exe);
   const downloadUrl = `https://github.com/${gh.owner}/${gh.repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(exeName)}`;
@@ -205,7 +208,6 @@ async function main() {
 
   writeJson(path.join(root, 'releases', `v${version}`, 'manifest.json'), manifest);
   writeJson(path.join(root, 'releases', 'latest.json'), manifest);
-  writeJson(path.join(root, 'resources', 'update.json'), { manifestUrl });
 
   console.log(`Publishing manifests to branch "${branch}"...`);
   execInherit('git add -A releases resources/update.json', { cwd: root });
