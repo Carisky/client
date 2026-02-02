@@ -52,6 +52,12 @@ function compareVersions(a, b) {
   return 0;
 }
 
+function toAssetName(fileName) {
+  // GitHub release asset names with spaces often become awkward/404-prone when copied around.
+  // Use a stable "no spaces" name for upload + manifest.
+  return String(fileName || '').trim().replace(/\s+/g, '.');
+}
+
 async function ghApi(url, { method = 'GET', token, headers = {}, body } = {}) {
   const res = await fetch(url, {
     method,
@@ -98,8 +104,8 @@ async function getOrCreateRelease({ owner, repo, tag, token }) {
   return rel;
 }
 
-async function uploadReleaseAsset({ uploadUrl, filePath, token }) {
-  const name = path.basename(filePath);
+async function uploadReleaseAsset({ uploadUrl, filePath, token, assetName }) {
+  const name = String(assetName || path.basename(filePath)).trim();
   const url = String(uploadUrl).replace('{?name,label}', `?name=${encodeURIComponent(name)}`);
   const stat = fs.statSync(filePath);
   const stream = fs.createReadStream(filePath);
@@ -214,6 +220,27 @@ async function main() {
     throw new Error('Missing GitHub token. Set env var GITHUB_TOKEN (or GH_TOKEN) with "repo" scope to upload release assets.');
   }
 
+  // Guard vs remote: don't publish an older version than what's already released.
+  if (!process.env.ALLOW_OLDER_RELEASE) {
+    try {
+      const rels = await ghApi(`https://api.github.com/repos/${gh.owner}/${gh.repo}/releases?per_page=100`, { token });
+      if (Array.isArray(rels)) {
+        const tags = rels
+          .map((r) => (r && typeof r === 'object' ? String(r.tag_name || '').trim() : ''))
+          .filter((t) => /^v\d+\.\d+\.\d+/.test(t))
+          .map((t) => t.replace(/^v/, ''));
+        const max = tags.reduce((acc, cur) => (acc && compareVersions(acc, cur) >= 0 ? acc : cur), '');
+        if (max && compareVersions(max, version) > 0) {
+          throw new Error(
+            `Refusing to publish v${version}: GitHub already has v${max}. Bump package.json version or set ALLOW_OLDER_RELEASE=1.`,
+          );
+        }
+      }
+    } catch (e) {
+      if (e instanceof Error) throw e;
+    }
+  }
+
   console.log(`Building v${version}...`);
   const forgeJs = path.join(root, 'node_modules', '@electron-forge', 'cli', 'dist', 'electron-forge.js');
   if (!fs.existsSync(forgeJs)) {
@@ -235,7 +262,7 @@ async function main() {
   if (nupkgs.length === 0) throw new Error('Could not find any .nupkg files in out/make (required for Squirrel auto-update)');
 
   const tag = `v${version}`;
-  const exeName = path.basename(exe);
+  const exeName = toAssetName(path.basename(exe));
   const downloadBase = `https://github.com/${gh.owner}/${gh.repo}/releases/download/${encodeURIComponent(tag)}`;
   const downloadUrl = `${downloadBase}/${encodeURIComponent(exeName)}`;
   const squirrelFeedUrl = downloadBase;
@@ -273,9 +300,9 @@ async function main() {
 
   const assetPaths = [exe, releasesFile, ...nupkgs];
   for (const p of assetPaths) {
-    const name = path.basename(p);
+    const name = /\.exe$/i.test(p) ? toAssetName(path.basename(p)) : path.basename(p);
     await deleteReleaseAssetByName({ owner: gh.owner, repo: gh.repo, releaseId: rel.id, name, token });
-    await uploadReleaseAsset({ uploadUrl: rel.upload_url, filePath: p, token });
+    await uploadReleaseAsset({ uploadUrl: rel.upload_url, filePath: p, token, assetName: name });
   }
 
   console.log(`Done. Manifest: ${manifestUrl}`);
