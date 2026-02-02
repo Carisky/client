@@ -120,23 +120,22 @@ function renderUpdateStatus(status: unknown) {
     typeof s.percent === "number" && Number.isFinite(s.percent)
       ? Math.max(0, Math.min(100, s.percent))
       : null;
-
-  const label =
-    state === "checking"
-      ? "Проверяю обновление…"
-      : state === "available"
-        ? "Обновление найдено."
-        : state === "not-available"
-          ? "Обновление недоступно."
-          : state === "downloading"
-            ? `Скачиваю…${pct == null ? "" : ` ${pct.toFixed(0)}%`}`
-            : state === "downloaded"
-              ? "Скачано. Устанавливаю…"
-              : state === "installing"
-                ? "Устанавливаю…"
-                : state === "error"
-                  ? `Ошибка обновления: ${msg || "unknown"}`
-                  : msg || "";
+const label =
+  state === "checking"
+    ? "Sprawdzam aktualizacje…"
+    : state === "available"
+      ? "Znaleziono aktualizację."
+      : state === "not-available"
+        ? "Brak dostępnych aktualizacji."
+        : state === "downloading"
+          ? `Pobieranie…${pct == null ? "" : ` ${pct.toFixed(0)}%`}`
+          : state === "downloaded"
+            ? "Pobrano. Instaluję…"
+            : state === "installing"
+              ? "Instaluję…"
+              : state === "error"
+                ? `Błąd aktualizacji: ${msg || "unknown"}`
+                : msg || "";
 
   textEl.textContent = label;
 
