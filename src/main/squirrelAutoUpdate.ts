@@ -29,7 +29,9 @@ function attachListenersOnce() {
   autoUpdater.on('checking-for-update', () => send({ state: 'checking' }));
   autoUpdater.on('update-available', () => send({ state: 'available' }));
   autoUpdater.on('update-not-available', () => send({ state: 'not-available' }));
-  autoUpdater.on('download-progress', (p) => {
+  // Electron's TS typings don't include all platform-specific events (Squirrel/macOS).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (autoUpdater as any).on('download-progress', (p: any) => {
     const percent = typeof p?.percent === 'number' ? p.percent : undefined;
     const transferred = typeof p?.transferred === 'number' ? p.transferred : undefined;
     const total = typeof p?.total === 'number' ? p.total : undefined;
@@ -86,4 +88,3 @@ export function startSquirrelUpdate(feedUrl: string, target: WebContents): { ok:
 
   return { ok: true };
 }
-
