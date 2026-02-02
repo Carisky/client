@@ -14,6 +14,59 @@ if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
+function isSemverDirName(name: string): boolean {
+  return /^app-\d+\.\d+\.\d+(?:[-+].+)?$/i.test(String(name || '').trim());
+}
+
+function getSquirrelInstallRoot(): { root: string; currentAppDir: string | null } | null {
+  if (process.platform !== 'win32') return null;
+  if (!app.isPackaged) return null;
+
+  const exeDir = path.dirname(process.execPath);
+  const base = path.basename(exeDir);
+
+  // Typical: %LOCALAPPDATA%\<app>\app-x.y.z\<exe>
+  if (isSemverDirName(base)) {
+    return { root: path.dirname(exeDir), currentAppDir: base };
+  }
+
+  // Fallback: sometimes process.execPath is the root stub: %LOCALAPPDATA%\<app>\<exe>
+  return { root: exeDir, currentAppDir: null };
+}
+
+function cleanupOldSquirrelAppDirs() {
+  const ctx = getSquirrelInstallRoot();
+  if (!ctx) return;
+
+  const { root } = ctx;
+  const currentAppDir = ctx.currentAppDir ?? `app-${app.getVersion()}`;
+
+  try {
+    if (!fs.existsSync(path.join(root, 'Update.exe'))) return;
+  } catch {
+    return;
+  }
+
+  let entries: fs.Dirent[] = [];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    if (!isSemverDirName(e.name)) continue;
+    if (e.name === currentAppDir) continue;
+
+    try {
+      fs.rmSync(path.join(root, e.name), { recursive: true, force: true, maxRetries: 3 });
+    } catch {
+      // ignore (e.g. files still locked)
+    }
+  }
+}
+
 function resolveAppIconPath(): string | undefined {
   const candidates: string[] = [];
   if (!app.isPackaged) {
@@ -65,6 +118,9 @@ app.on('ready', () => {
   registerRaportIpc();
   void getPrisma().catch(() => {});
   createWindow();
+
+  // Squirrel leaves old app-* folders for rollback; we prefer disk cleanup.
+  setTimeout(() => cleanupOldSquirrelAppDirs(), 5000);
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common
