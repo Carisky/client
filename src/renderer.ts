@@ -76,11 +76,11 @@ function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVe
   el.id = 'update-backdrop';
   el.className = 'update-backdrop';
   el.innerHTML = `
-    <div class="update-card" role="dialog" aria-modal="true" aria-label="Требуется обновление">
+    <div class="update-card" role="dialog" aria-modal="true" aria-label="Wymagana aktualizacja">
       <div class="update-card-header">
         <div>
-          <div class="update-title">Требуется обновление</div>
-          <div class="update-sub">Текущая версия: ${escapeHtml(currentVersion)} • Доступна: ${escapeHtml(latestVersion)}</div>
+          <div class="update-title">Wymagana aktualizacja</div>
+          <div class="update-sub">Twoja wersja: ${escapeHtml(currentVersion)} • Dostępna: ${escapeHtml(latestVersion)}</div>
         </div>
         <div class="update-badge">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin:0">
@@ -91,10 +91,10 @@ function renderUpdateBlock(latestVersion: string, downloadUrl: string, currentVe
         </div>
       </div>
       <div class="update-card-body">
-        <div class="muted">Чтобы продолжить, установи последнюю версию приложения.</div>
+        <div class="muted">Aby kontynuować, zainstaluj najnowszą wersję aplikacji.</div>
         <div class="update-actions">
           <button id="btn-update-now" class="btn btn-primary">
-            Обновись до версии ${escapeHtml(latestVersion)}
+            Zaktualizuj do wersji ${escapeHtml(latestVersion)}
           </button>
         </div>
       </div>
