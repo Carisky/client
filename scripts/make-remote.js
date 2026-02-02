@@ -103,6 +103,20 @@ async function uploadReleaseAsset({ uploadUrl, filePath, token }) {
   return res.json();
 }
 
+async function deleteReleaseAssetByName({ owner, repo, releaseId, name, token }) {
+  const assets = await ghApi(`https://api.github.com/repos/${owner}/${repo}/releases/${releaseId}/assets`, { token });
+  if (!Array.isArray(assets)) return;
+  const existing = assets.find((a) => a && typeof a === 'object' && a.name === name);
+  if (!existing) return;
+  const assetId = existing.id;
+  if (!assetId) return;
+  console.log(`Deleting existing asset: ${name}`);
+  await ghApi(`https://api.github.com/repos/${owner}/${repo}/releases/assets/${assetId}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
 function walk(dir) {
   const out = [];
   const stack = [dir];
@@ -207,6 +221,7 @@ async function main() {
 
   console.log(`Creating GitHub release ${tag}...`);
   const rel = await getOrCreateRelease({ owner: gh.owner, repo: gh.repo, tag, token });
+  await deleteReleaseAssetByName({ owner: gh.owner, repo: gh.repo, releaseId: rel.id, name: exeName, token });
   await uploadReleaseAsset({ uploadUrl: rel.upload_url, filePath: exe, token });
 
   console.log(`Done. Manifest: ${manifestUrl}`);
