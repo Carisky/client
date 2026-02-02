@@ -87,6 +87,8 @@ async function uploadReleaseAsset({ uploadUrl, filePath, token }) {
   console.log(`Uploading asset (${Math.round(stat.size / (1024 * 1024))} MB): ${name}`);
   const res = await fetch(url, {
     method: 'POST',
+    // Node.js fetch requires duplex for streaming request bodies.
+    duplex: 'half',
     headers: {
       accept: 'application/vnd.github+json',
       authorization: `Bearer ${token}`,
