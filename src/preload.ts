@@ -66,10 +66,38 @@ export type ValidationItems = {
   range: { start: string; end: string };
   key: ValidationGroupKey;
   items: Array<{
+    rowId: number;
     data_mrn: string | null;
     odbiorca: string | null;
     numer_mrn: string | null;
     coef: number | null;
+    verifiedManual: boolean;
+    checkable: boolean;
+    outlier: boolean;
+    outlierSide: 'low' | 'high' | null;
+  }>;
+};
+
+export type ValidationDashboard = {
+  range: { start: string; end: string };
+  stats: { outliersHigh: number; outliersLow: number; singles: number; verifiedManual: number };
+  days: Array<{ date: string; outliersHigh: number; outliersLow: number; singles: number; total: number }>;
+};
+
+export type ValidationDayFilter = 'all' | 'outliersHigh' | 'outliersLow' | 'singles';
+
+export type ValidationDayItems = {
+  date: string;
+  totals: { all: number; outliersHigh: number; outliersLow: number; singles: number; verifiedManual: number };
+  items: Array<{
+    rowId: number;
+    data_mrn: string | null;
+    numer_mrn: string | null;
+    odbiorca: string | null;
+    key: ValidationGroupKey;
+    coef: number | null;
+    verifiedManual: boolean;
+    checkable: boolean;
     outlier: boolean;
     outlierSide: 'low' | 'high' | null;
   }>;
@@ -99,4 +127,9 @@ contextBridge.exposeInMainWorld('api', {
   getValidationGroups: (month: string): Promise<ValidationGroups> => ipcRenderer.invoke('validation:groups', { month }),
   getValidationItems: (month: string, key: ValidationGroupKey): Promise<ValidationItems> =>
     ipcRenderer.invoke('validation:items', { month, key }),
+  getValidationDashboard: (month: string): Promise<ValidationDashboard> => ipcRenderer.invoke('validation:dashboard', { month }),
+  getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter): Promise<ValidationDayItems> =>
+    ipcRenderer.invoke('validation:dayItems', { month, date, filter }),
+  setValidationManualVerified: (rowId: number, verified: boolean): Promise<{ ok: true }> =>
+    ipcRenderer.invoke('validation:setManualVerified', { rowId, verified }),
 });

@@ -358,6 +358,8 @@ type ValidationGroupKey = {
   kod_towaru: string;
 };
 
+type ValidationDayFilter = 'all' | 'outliersHigh' | 'outliersLow' | 'singles';
+
 function encodeKey(key: unknown): string {
   try {
     return btoa(unescape(encodeURIComponent(JSON.stringify(key))));
@@ -378,6 +380,65 @@ function decodeKey<T>(key: string): T | null {
 function prettyKeyLine(label: string, value: string): string {
   const v = value && value.trim().length > 0 ? value : '-';
   return `<div class="kv-key">${escapeHtml(label)}</div><div class="kv-val">${escapeHtml(v)}</div>`;
+}
+
+function renderCoefArrow(side: 'low' | 'high' | null): string {
+  if (side === 'low') return '<span class="coef-arrow low" title="Below lower IQR bound">&darr;</span>';
+  if (side === 'high') return '<span class="coef-arrow high" title="Above upper IQR bound">&uarr;</span>';
+  return '';
+}
+
+async function refreshValidationDashboardCounts() {
+  const month = els.validationMonth.value;
+  if (!month) return;
+  const UP = '\u2191';
+  const DOWN = '\u2193';
+  try {
+    const dash = await window.api.getValidationDashboard(month);
+
+    const statHigh = els.validationGroups.querySelector('#validation-stat-high') as HTMLElement | null;
+    const statLow = els.validationGroups.querySelector('#validation-stat-low') as HTMLElement | null;
+    const statSingles = els.validationGroups.querySelector('#validation-stat-singles') as HTMLElement | null;
+    const statManual = els.validationGroups.querySelector('#validation-stat-manual') as HTMLElement | null;
+    if (statHigh) statHigh.textContent = String(dash.stats.outliersHigh);
+    if (statLow) statLow.textContent = String(dash.stats.outliersLow);
+    if (statSingles) statSingles.textContent = String(dash.stats.singles);
+    if (statManual) statManual.textContent = String(dash.stats.verifiedManual);
+
+    const byDate = new Map(dash.days.map((d) => [d.date, d] as const));
+    for (const el of Array.from(els.validationGroups.querySelectorAll('.day-count'))) {
+      const span = el as HTMLElement;
+      const date = span.dataset.date ?? '';
+      const d = byDate.get(date);
+      span.textContent = d ? String(d.total) : '0';
+    }
+
+    for (const el of Array.from(els.validationGroups.querySelectorAll('.day-badge'))) {
+      const span = el as HTMLElement;
+      const date = span.dataset.date ?? '';
+      const field = span.dataset.field ?? '';
+      const d = byDate.get(date);
+      if (!d) {
+        if (field === 'high') span.textContent = `${UP} 0`;
+        else if (field === 'low') span.textContent = `${DOWN} 0`;
+        else if (field === 'singles') span.textContent = `1x 0`;
+        if (field !== 'total') span.dataset.zero = '1';
+        continue;
+      }
+      if (field === 'high') {
+        span.textContent = `${UP} ${d.outliersHigh}`;
+        span.dataset.zero = d.outliersHigh ? '0' : '1';
+      } else if (field === 'low') {
+        span.textContent = `${DOWN} ${d.outliersLow}`;
+        span.dataset.zero = d.outliersLow ? '0' : '1';
+      } else if (field === 'singles') {
+        span.textContent = `1x ${d.singles}`;
+        span.dataset.zero = d.singles ? '0' : '1';
+      }
+    }
+  } catch {
+    // ignore
+  }
 }
 
 async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
@@ -422,7 +483,8 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
                 <th>Data MRN</th>
                 <th>Odbiorca</th>
                 <th>Numer MRN</th>
-                <th>Wspolczynnik</th>
+                <th class="coef-col">Wspolczynnik</th>
+                <th class="manual-col" title="Verified manually">Manual</th>
               </tr>
             </thead>
             <tbody>
@@ -430,13 +492,22 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
                 .map((it) => {
                   const coef = it.coef == null ? '-' : Number(it.coef).toFixed(6);
                   const rowClass = it.outlier ? ' class="outlier"' : '';
-                  const arrow =
-                    it.outlierSide === 'low' ? '<span class="coef-arrow low" title="Below lower IQR bound">↓</span>' : it.outlierSide === 'high' ? '<span class="coef-arrow high" title="Above upper IQR bound">↑</span>' : '';
+                  const arrow = renderCoefArrow(it.outlierSide);
+                  const isVerifiable = it.rowId && Number.isFinite(it.rowId) && it.coef != null && Number.isFinite(it.coef);
+                  const disabledAttr = isVerifiable ? '' : ' disabled';
+                  const checkedAttr = it.verifiedManual ? ' checked' : '';
+                  const singleTag =
+                    !it.verifiedManual && it.coef != null && Number.isFinite(it.coef) && !it.checkable
+                      ? '<span class="single-tag" title="Not enough items for IQR on this day">single</span>'
+                      : '';
                   return `<tr${rowClass}>
                     <td class="mono">${escapeHtml(it.data_mrn ?? '-')}</td>
                     <td title="${escapeHtml(it.odbiorca ?? '')}">${escapeHtml(it.odbiorca ?? '-')}</td>
                     <td class="mono">${escapeHtml(it.numer_mrn ?? '-')}</td>
-                    <td class="mono coef-cell">${arrow}${escapeHtml(coef)}</td>
+                    <td class="mono coef-cell coef-col"><span class="coef-value">${escapeHtml(coef)}</span><span class="coef-meta">${singleTag}${arrow}</span></td>
+                    <td class="mono manual-col">
+                      <input class="manual-verify" type="checkbox" data-rowid="${escapeHtml(String(it.rowId ?? ''))}"${checkedAttr}${disabledAttr} />
+                    </td>
                   </tr>`;
                 })
                 .join('')}
@@ -446,6 +517,137 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
 
     body.innerHTML = `${keyGrid}${rows}`;
     detailsEl.dataset.loaded = '1';
+
+    for (const el of Array.from(body.querySelectorAll('input.manual-verify'))) {
+      const input = el as HTMLInputElement;
+      input.addEventListener('change', async () => {
+        const rowId = Number(input.dataset.rowid);
+        if (!Number.isFinite(rowId) || rowId <= 0) return;
+        input.disabled = true;
+        try {
+          await window.api.setValidationManualVerified(rowId, input.checked);
+          detailsEl.dataset.loaded = '0';
+          await refreshValidationDashboardCounts();
+          await loadValidationGroupDetails(detailsEl);
+        } catch {
+          // ignore
+        }
+      });
+    }
+  } catch (e: unknown) {
+    body.innerHTML = `<div class="muted">Error: ${escapeHtml(errorMessage(e))}</div>`;
+  } finally {
+    detailsEl.dataset.loading = '0';
+  }
+}
+
+async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
+  const month = els.validationMonth.value;
+  const date = detailsEl.dataset.date ?? '';
+  if (!date || !month) return;
+  if (detailsEl.dataset.loading === '1') return;
+  if (detailsEl.dataset.loaded === '1') return;
+
+  const body = detailsEl.querySelector('.accordion-body') as HTMLElement | null;
+  if (!body) return;
+
+  const filter = (detailsEl.dataset.filter as ValidationDayFilter) ?? 'all';
+
+  detailsEl.dataset.loading = '1';
+  body.innerHTML = `<div class="muted">Loading...</div>`;
+
+  try {
+    const res = await window.api.getValidationDayItems(month, date, filter);
+
+    const btn = (f: ValidationDayFilter, label: string) =>
+      `<button class="ghost btn-small${filter === f ? ' active' : ''}" data-filter="${escapeHtml(f)}">${escapeHtml(label)}</button>`;
+
+    const filters = `
+      <div class="day-filters">
+        ${btn('all', `All (${res.totals.all})`)}
+        ${btn('outliersHigh', `↑ (${res.totals.outliersHigh})`)}
+        ${btn('outliersLow', `↓ (${res.totals.outliersLow})`)}
+        ${btn('singles', `single (${res.totals.singles})`)}
+      </div>
+    `;
+
+    const rows =
+      res.items.length === 0
+        ? `<div class="muted">No items.</div>`
+        : `
+          <table class="mini-table">
+            <thead>
+              <tr>
+                <th>Data MRN</th>
+                <th>Grupa</th>
+                <th>Numer MRN</th>
+                <th class="coef-col">Wspolczynnik</th>
+                <th class="manual-col" title="Verified manually">Manual</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${res.items
+                .map((it) => {
+                  const coef = it.coef == null ? '-' : Number(it.coef).toFixed(6);
+                  const rowClass = it.outlier ? ' class="outlier"' : '';
+                  const arrow = renderCoefArrow(it.outlierSide);
+                  const isVerifiable = it.rowId && Number.isFinite(it.rowId) && it.coef != null && Number.isFinite(it.coef);
+                  const disabledAttr = isVerifiable ? '' : ' disabled';
+                  const checkedAttr = it.verifiedManual ? ' checked' : '';
+                  const groupParts = [
+                    it.key.odbiorca || '-',
+                    it.key.kod_towaru ? `kod:${it.key.kod_towaru}` : '',
+                    it.key.waluta ? `wal:${it.key.waluta}` : '',
+                  ].filter(Boolean);
+                  const groupTitle = groupParts.join(' | ');
+                  const singleTag =
+                    !it.verifiedManual && it.coef != null && Number.isFinite(it.coef) && !it.checkable
+                      ? '<span class="single-tag" title="Not enough items for IQR in this group/day">single</span>'
+                      : '';
+                  return `<tr${rowClass}>
+                    <td class="mono">${escapeHtml(it.data_mrn ?? '-')}</td>
+                    <td title="${escapeHtml(groupTitle)}">${escapeHtml(groupTitle)}</td>
+                    <td class="mono">${escapeHtml(it.numer_mrn ?? '-')}</td>
+                    <td class="mono coef-cell coef-col"><span class="coef-value">${escapeHtml(coef)}</span><span class="coef-meta">${singleTag}${arrow}</span></td>
+                    <td class="mono manual-col">
+                      <input class="manual-verify" type="checkbox" data-rowid="${escapeHtml(String(it.rowId ?? ''))}"${checkedAttr}${disabledAttr} />
+                    </td>
+                  </tr>`;
+                })
+                .join('')}
+            </tbody>
+          </table>
+        `;
+
+    body.innerHTML = `${filters}${rows}`;
+    detailsEl.dataset.loaded = '1';
+
+    for (const el of Array.from(body.querySelectorAll('button[data-filter]'))) {
+      const b = el as HTMLButtonElement;
+      b.addEventListener('click', () => {
+        const f = (b.dataset.filter as ValidationDayFilter) ?? 'all';
+        detailsEl.dataset.filter = f;
+        detailsEl.dataset.loaded = '0';
+        void loadValidationDayDetails(detailsEl);
+      });
+    }
+
+    for (const el of Array.from(body.querySelectorAll('input.manual-verify'))) {
+      const input = el as HTMLInputElement;
+      input.addEventListener('change', async () => {
+        const rowId = Number(input.dataset.rowid);
+        if (!Number.isFinite(rowId) || rowId <= 0) return;
+        input.disabled = true;
+        try {
+          await window.api.setValidationManualVerified(rowId, input.checked);
+          detailsEl.dataset.loaded = '0';
+          await refreshValidationDashboardCounts();
+          await loadValidationDayDetails(detailsEl);
+        } catch {
+          // ignore
+        }
+      });
+    }
   } catch (e: unknown) {
     body.innerHTML = `<div class="muted">Error: ${escapeHtml(errorMessage(e))}</div>`;
   } finally {
@@ -472,49 +674,139 @@ async function refreshValidation() {
     return;
   }
 
+  const openDayDates = Array.from(els.validationGroups.querySelectorAll('details.validation-day[open]'))
+    .map((d) => (d as HTMLDetailsElement).dataset.date ?? '')
+    .filter(Boolean);
+  const openGroupKeys = Array.from(els.validationGroups.querySelectorAll('details.validation-group[open]'))
+    .map((d) => (d as HTMLDetailsElement).dataset.key ?? '')
+    .filter(Boolean);
+
   setStatus(els.validationStatus, 'Loading...');
   els.validationGroups.innerHTML = '';
   els.validationMeta.textContent = '';
 
   try {
-    const res = await window.api.getValidationGroups(month);
-    els.validationMeta.textContent = `Range: ${res.range.start} -> ${res.range.end} | Groups: ${res.groups.length}`;
+    const [dash, res] = await Promise.all([window.api.getValidationDashboard(month), window.api.getValidationGroups(month)]);
+    els.validationMeta.textContent = `Range: ${res.range.start} -> ${res.range.end} | Groups: ${res.groups.length} | Outliers: ↑${dash.stats.outliersHigh} ↓${dash.stats.outliersLow} | Singles: ${dash.stats.singles} | Manual: ${dash.stats.verifiedManual}`;
 
-    if (res.groups.length === 0) {
-      els.validationGroups.innerHTML = `<div class="muted" style="padding:10px 12px;">No groups in this month.</div>`;
-      setStatus(els.validationStatus, '');
-      return;
-    }
+    const dashboardHtml = `
+      <div class="section-title">Dashboard</div>
+      <div class="dash-summary">
+        <div class="dash-card">
+          <div class="dash-label">Outliers ↑</div>
+          <div id="validation-stat-high" class="dash-value">${dash.stats.outliersHigh}</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-label">Outliers ↓</div>
+          <div id="validation-stat-low" class="dash-value">${dash.stats.outliersLow}</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-label">Singles</div>
+          <div id="validation-stat-singles" class="dash-value">${dash.stats.singles}</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-label">Manual</div>
+          <div id="validation-stat-manual" class="dash-value">${dash.stats.verifiedManual}</div>
+        </div>
+      </div>
+      <div class="section-title">Days</div>
+      ${
+        dash.days.length === 0
+          ? `<div class="muted" style="padding:6px 2px 10px;">No days.</div>`
+          : dash.days
+              .slice(0, 5000)
+              .map(
+                (d) => `
+                  <details class="accordion validation-day" data-date="${escapeHtml(d.date)}">
+                    <summary>
+                      <span class="day-count" data-date="${escapeHtml(d.date)}">${d.total}</span>
+                      <span class="mrn-code">${escapeHtml(d.date)}</span>
+                      <span class="badge badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="low" data-zero="${d.outliersLow ? '0' : '1'}">↓ ${d.outliersLow}</span>
+                      <span class="badge badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="high" data-zero="${d.outliersHigh ? '0' : '1'}">↑ ${d.outliersHigh}</span>
+                      <span class="badge badge-slate day-badge" data-date="${escapeHtml(d.date)}" data-field="singles" data-zero="${d.singles ? '0' : '1'}">1x ${d.singles}</span>
+                    </summary>
+                    <div class="accordion-body">
+                      <div class="muted">Open to load batch.</div>
+                    </div>
+                  </details>
+                `,
+              )
+              .join('')
+      }
+      <div class="section-title">Groups</div>
+    `;
 
-    els.validationGroups.innerHTML = res.groups
-      .slice(0, 1000)
-      .map((g) => {
-        const titleParts = [
-          g.key.odbiorca || '-',
-          g.key.kod_towaru ? `kod:${g.key.kod_towaru}` : '',
-          g.key.waluta ? `wal:${g.key.waluta}` : '',
-        ].filter(Boolean);
-        const title = titleParts.join(' | ');
-        const keyEncoded = encodeKey(g.key);
-        return `
-          <details class="accordion" data-key="${escapeHtml(keyEncoded)}">
-            <summary>
-              <span class="mrn-code" title="${escapeHtml(title)}">${escapeHtml(title || '-')}</span>
-              <span class="badge">${g.count}</span>
-            </summary>
-            <div class="accordion-body">
-              <div class="muted">Open to load details.</div>
-            </div>
-          </details>
-        `;
-      })
-      .join('');
+    const groupsHtml =
+      res.groups.length === 0
+        ? `<div class="muted" style="padding:6px 2px 10px;">No groups in this month.</div>`
+        : res.groups
+            .slice(0, 1000)
+            .map((g) => {
+              const titleParts = [
+                g.key.odbiorca || '-',
+                g.key.kod_towaru ? `kod:${g.key.kod_towaru}` : '',
+                g.key.waluta ? `wal:${g.key.waluta}` : '',
+              ].filter(Boolean);
+              const title = titleParts.join(' | ');
+              const keyEncoded = encodeKey(g.key);
+              return `
+                <details class="accordion validation-group" data-key="${escapeHtml(keyEncoded)}">
+                  <summary>
+                    <span class="mrn-code" title="${escapeHtml(title)}">${escapeHtml(title || '-')}</span>
+                    <span class="badge">${g.count}</span>
+                  </summary>
+                  <div class="accordion-body">
+                    <div class="muted">Open to load details.</div>
+                  </div>
+                </details>
+              `;
+            })
+            .join('');
+
+    els.validationGroups.innerHTML = `${dashboardHtml}${groupsHtml}`;
 
     for (const el of Array.from(els.validationGroups.querySelectorAll('details.accordion'))) {
       const d = el as HTMLDetailsElement;
       d.addEventListener('toggle', () => {
-        if (d.open) void loadValidationGroupDetails(d);
+        if (!d.open) return;
+        if (d.classList.contains('validation-day')) void loadValidationDayDetails(d);
+        else void loadValidationGroupDetails(d);
       });
+    }
+
+    for (const el of Array.from(els.validationGroups.querySelectorAll('.day-badge'))) {
+      const badge = el as HTMLElement;
+      badge.addEventListener('click', (e) => {
+        const details = badge.closest('details') as HTMLDetailsElement | null;
+        if (!details) return;
+        const field = badge.dataset.field ?? '';
+        let filter: ValidationDayFilter = 'all';
+        if (field === 'high') filter = 'outliersHigh';
+        else if (field === 'low') filter = 'outliersLow';
+        else if (field === 'singles') filter = 'singles';
+        details.dataset.filter = filter;
+        details.dataset.loaded = '0';
+        if (details.open) {
+          e.stopPropagation();
+          void loadValidationDayDetails(details);
+        }
+      });
+    }
+
+    const openDaySet = new Set(openDayDates);
+    for (const el of Array.from(els.validationGroups.querySelectorAll('details.validation-day'))) {
+      const d = el as HTMLDetailsElement;
+      if (!openDaySet.has(d.dataset.date ?? '')) continue;
+      d.open = true;
+      void loadValidationDayDetails(d);
+    }
+
+    const openGroupSet = new Set(openGroupKeys);
+    for (const el of Array.from(els.validationGroups.querySelectorAll('details.validation-group'))) {
+      const d = el as HTMLDetailsElement;
+      if (!openGroupSet.has(d.dataset.key ?? '')) continue;
+      d.open = true;
+      void loadValidationGroupDetails(d);
     }
 
     setStatus(els.validationStatus, '');

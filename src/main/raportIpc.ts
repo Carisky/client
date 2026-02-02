@@ -7,11 +7,14 @@ import {
   getMrnBatchRows,
   getRaportMeta,
   getRaportPage,
+  getValidationDashboard,
+  getValidationDayItems,
   getValidationDefaultMonth,
   getValidationGroups,
   getValidationItems,
   importRaportFromXlsx,
   rebuildMrnBatch,
+  setValidationManualVerified,
 } from './raportDb';
 
 export function registerRaportIpc(): void {
@@ -58,5 +61,19 @@ export function registerRaportIpc(): void {
   ipcMain.handle('validation:groups', async (_evt, args: { month: string }) => getValidationGroups({ month: args?.month }));
   ipcMain.handle('validation:items', async (_evt, args: { month: string; key: unknown }) =>
     getValidationItems({ month: args?.month, key: args?.key as never }),
+  );
+
+  ipcMain.handle('validation:dashboard', async (_evt, args: { month: string }) =>
+    getValidationDashboard({ month: args?.month }),
+  );
+  ipcMain.handle('validation:dayItems', async (_evt, args: { month: string; date: string; filter: unknown }) =>
+    getValidationDayItems({
+      month: args?.month,
+      date: args?.date,
+      filter: (args?.filter as never) ?? 'all',
+    }),
+  );
+  ipcMain.handle('validation:setManualVerified', async (_evt, args: { rowId: number; verified: boolean }) =>
+    setValidationManualVerified({ rowId: args?.rowId, verified: Boolean(args?.verified) }),
   );
 }

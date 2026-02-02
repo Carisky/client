@@ -105,9 +105,17 @@ async function ensureSchema(client: PrismaClient): Promise<void> {
     );
   `;
 
+  const createValidationManual = `
+    CREATE TABLE IF NOT EXISTS "validation_manual" (
+      "raportRowId" INTEGER PRIMARY KEY,
+      "verifiedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+
   await client.$executeRawUnsafe(createMeta);
   await client.$executeRawUnsafe(createRows);
   await client.$executeRawUnsafe(createMrnBatch);
+  await client.$executeRawUnsafe(createValidationManual);
 
   await client.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "mrn_batch_numer_mrn_idx" ON "mrn_batch" ("numer_mrn");');
   await client.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "mrn_batch_raportRowId_idx" ON "mrn_batch" ("raportRowId");');
@@ -519,6 +527,19 @@ function quantileSorted(valuesAsc: number[], p: number): number {
   return valuesAsc[lo] * (1 - w) + valuesAsc[hi] * w;
 }
 
+async function getValidationManualSet(client: PrismaClient): Promise<Set<number>> {
+  const rows = (await client.$queryRawUnsafe(`
+    SELECT "raportRowId" as "id"
+    FROM "validation_manual";
+  `)) as Array<{ id: number }>;
+  const set = new Set<number>();
+  for (const r of rows) {
+    const id = Number(r?.id);
+    if (Number.isFinite(id)) set.add(id);
+  }
+  return set;
+}
+
 export type ValidationGroupKey = {
   odbiorca: string;
   kraj_wysylki: string;
@@ -633,10 +654,13 @@ export async function getValidationItems(params: { month: string; key: Validatio
   range: { start: string; end: string };
   key: ValidationGroupKey;
   items: Array<{
+    rowId: number;
     data_mrn: string | null;
     odbiorca: string | null;
     numer_mrn: string | null;
     coef: number | null;
+    verifiedManual: boolean;
+    checkable: boolean;
     outlier: boolean;
     outlierSide: 'low' | 'high' | null;
   }>;
@@ -644,6 +668,7 @@ export async function getValidationItems(params: { month: string; key: Validatio
   const client = await getPrisma();
   const range = toYmdRange(params.month);
   const rows = await queryValidationRepresentativeRows(client, range);
+  const manual = await getValidationManualSet(client);
 
   const want = params.key;
   const items = rows
@@ -671,11 +696,17 @@ export async function getValidationItems(params: { month: string; key: Validatio
       const fees = parseLocaleNumber(r.oplaty_celne_razem);
       const mass = parseLocaleNumber(r.masa_netto);
       const coef = fees != null && mass != null && mass !== 0 ? fees / mass : null;
+      const rowIdRaw = Number(r.id);
+      const rowId = Number.isFinite(rowIdRaw) ? rowIdRaw : 0;
+      const verifiedManual = rowId > 0 ? manual.has(rowId) : false;
       return {
+        rowId,
         data_mrn: r.data_mrn ?? null,
         odbiorca: r.odbiorca ?? null,
         numer_mrn: r.numer_mrn ?? null,
         coef,
+        verifiedManual,
+        checkable: false,
         outlier: false,
         outlierSide: null as 'low' | 'high' | null,
       };
@@ -686,6 +717,7 @@ export async function getValidationItems(params: { month: string; key: Validatio
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     if (!it.data_mrn) continue;
+    if (it.verifiedManual) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
     const arr = byDate.get(it.data_mrn);
     if (arr) arr.push(i);
@@ -710,6 +742,7 @@ export async function getValidationItems(params: { month: string; key: Validatio
     for (const i of indices) {
       const v = items[i].coef;
       if (v == null || !Number.isFinite(v)) continue;
+      items[i].checkable = true;
       if (v < lower) {
         items[i].outlier = true;
         items[i].outlierSide = 'low';
@@ -723,6 +756,18 @@ export async function getValidationItems(params: { month: string; key: Validatio
     }
   }
 
+  // Mark numeric-but-not-checkable (e.g. only 1 item in a day) for UI.
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.verifiedManual) continue;
+    if (!it.data_mrn) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    if (!it.checkable) {
+      it.outlier = false;
+      it.outlierSide = null;
+    }
+  }
+
   items.sort(
     (a, b) =>
       String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
@@ -730,4 +775,269 @@ export async function getValidationItems(params: { month: string; key: Validatio
   );
 
   return { range, key: params.key, items };
+}
+
+export type ValidationDayFilter = 'all' | 'outliersHigh' | 'outliersLow' | 'singles';
+
+export async function setValidationManualVerified(params: { rowId: number; verified: boolean }): Promise<{ ok: true }> {
+  const client = await getPrisma();
+  const id = Number(params.rowId);
+  if (!Number.isFinite(id) || id <= 0) return { ok: true };
+
+  if (params.verified) {
+    await client.$executeRawUnsafe(
+      `
+        INSERT OR REPLACE INTO "validation_manual" ("raportRowId", "verifiedAt")
+        VALUES (?, CURRENT_TIMESTAMP);
+      `,
+      id,
+    );
+  } else {
+    await client.$executeRawUnsafe(`DELETE FROM "validation_manual" WHERE "raportRowId" = ?;`, id);
+  }
+
+  return { ok: true };
+}
+
+function toValidationKey(r: {
+  odbiorca: string | null;
+  kraj_wysylki: string | null;
+  warunki_dostawy: string | null;
+  waluta: string | null;
+  kurs_waluty: string | null;
+  transport_na_granicy_rodzaj: string | null;
+  kod_towaru: string | null;
+}): ValidationGroupKey {
+  return {
+    odbiorca: (r.odbiorca ?? '').trim(),
+    kraj_wysylki: (r.kraj_wysylki ?? '').trim(),
+    warunki_dostawy: (r.warunki_dostawy ?? '').trim(),
+    waluta: (r.waluta ?? '').trim(),
+    kurs_waluty: (r.kurs_waluty ?? '').trim(),
+    transport_na_granicy_rodzaj: (r.transport_na_granicy_rodzaj ?? '').trim(),
+    kod_towaru: (r.kod_towaru ?? '').trim(),
+  };
+}
+
+type ValidationComputedItem = {
+  rowId: number;
+  data_mrn: string | null;
+  numer_mrn: string | null;
+  odbiorca: string | null;
+  key: ValidationGroupKey;
+  coef: number | null;
+  verifiedManual: boolean;
+  checkable: boolean;
+  outlier: boolean;
+  outlierSide: 'low' | 'high' | null;
+};
+
+function computeIqrFlags(items: ValidationComputedItem[]): void {
+  const groupDay = new Map<string, number[]>();
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (!it.data_mrn) continue;
+    if (it.verifiedManual) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    const k = `${JSON.stringify(it.key)}|${it.data_mrn}`;
+    const arr = groupDay.get(k);
+    if (arr) arr.push(i);
+    else groupDay.set(k, [i]);
+  }
+
+  for (const indices of groupDay.values()) {
+    if (indices.length < 2) continue;
+    const valuesAsc = indices
+      .map((i) => items[i].coef as number)
+      .filter((v) => Number.isFinite(v))
+      .sort((a, b) => a - b);
+    if (valuesAsc.length < 2) continue;
+
+    const q1 = quantileSorted(valuesAsc, 0.25);
+    const q3 = quantileSorted(valuesAsc, 0.75);
+    const iqr = q3 - q1;
+    if (!Number.isFinite(iqr)) continue;
+    const lower = q1 - 1.5 * iqr;
+    const upper = q3 + 1.5 * iqr;
+
+    for (const i of indices) {
+      const v = items[i].coef;
+      if (v == null || !Number.isFinite(v)) continue;
+      items[i].checkable = true;
+      if (v < lower) {
+        items[i].outlier = true;
+        items[i].outlierSide = 'low';
+      } else if (v > upper) {
+        items[i].outlier = true;
+        items[i].outlierSide = 'high';
+      } else {
+        items[i].outlier = false;
+        items[i].outlierSide = null;
+      }
+    }
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.verifiedManual) {
+      it.checkable = false;
+      it.outlier = false;
+      it.outlierSide = null;
+      continue;
+    }
+    if (!it.data_mrn) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    if (!it.checkable) {
+      it.outlier = false;
+      it.outlierSide = null;
+    }
+  }
+}
+
+export async function getValidationDashboard(params: { month: string }): Promise<{
+  range: { start: string; end: string };
+  stats: { outliersHigh: number; outliersLow: number; singles: number; verifiedManual: number };
+  days: Array<{ date: string; outliersHigh: number; outliersLow: number; singles: number; total: number }>;
+}> {
+  const client = await getPrisma();
+  const range = toYmdRange(params.month);
+  const rows = await queryValidationRepresentativeRows(client, range);
+  const manual = await getValidationManualSet(client);
+
+  const items: ValidationComputedItem[] = rows.map((r) => {
+    const fees = parseLocaleNumber(r.oplaty_celne_razem);
+    const mass = parseLocaleNumber(r.masa_netto);
+    const coef = fees != null && mass != null && mass !== 0 ? fees / mass : null;
+    const rowIdRaw = Number(r.id);
+    const rowId = Number.isFinite(rowIdRaw) ? rowIdRaw : 0;
+    const verifiedManual = rowId > 0 ? manual.has(rowId) : false;
+    return {
+      rowId,
+      data_mrn: r.data_mrn ?? null,
+      numer_mrn: r.numer_mrn ?? null,
+      odbiorca: r.odbiorca ?? null,
+      key: toValidationKey(r),
+      coef,
+      verifiedManual,
+      checkable: false,
+      outlier: false,
+      outlierSide: null as 'low' | 'high' | null,
+    };
+  });
+
+  computeIqrFlags(items);
+
+  const dayMap = new Map<string, { date: string; outliersHigh: number; outliersLow: number; singles: number; total: number }>();
+  let verifiedManual = 0;
+  for (const it of items) {
+    if (it.verifiedManual) verifiedManual += 1;
+    if (!it.data_mrn) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    const date = it.data_mrn;
+    const agg =
+      dayMap.get(date) ?? { date, outliersHigh: 0, outliersLow: 0, singles: 0, total: 0 };
+    if (!it.verifiedManual) agg.total += 1;
+    if (it.outlierSide === 'high') agg.outliersHigh += 1;
+    if (it.outlierSide === 'low') agg.outliersLow += 1;
+    if (!it.verifiedManual && !it.checkable) agg.singles += 1;
+    dayMap.set(date, agg);
+  }
+
+  const days = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const stats = {
+    outliersHigh: days.reduce((s, d) => s + d.outliersHigh, 0),
+    outliersLow: days.reduce((s, d) => s + d.outliersLow, 0),
+    singles: days.reduce((s, d) => s + d.singles, 0),
+    verifiedManual,
+  };
+
+  return { range, stats, days };
+}
+
+export async function getValidationDayItems(params: {
+  month: string;
+  date: string;
+  filter: ValidationDayFilter;
+}): Promise<{
+  date: string;
+  totals: { all: number; outliersHigh: number; outliersLow: number; singles: number; verifiedManual: number };
+  items: Array<{
+    rowId: number;
+    data_mrn: string | null;
+    numer_mrn: string | null;
+    odbiorca: string | null;
+    key: ValidationGroupKey;
+    coef: number | null;
+    verifiedManual: boolean;
+    checkable: boolean;
+    outlier: boolean;
+    outlierSide: 'low' | 'high' | null;
+  }>;
+}> {
+  const client = await getPrisma();
+  const manual = await getValidationManualSet(client);
+
+  const date = String(params.date ?? '').trim();
+  const rows = await queryValidationRepresentativeRows(client, { start: date, end: date });
+  const items: ValidationComputedItem[] = rows.map((r) => {
+    const fees = parseLocaleNumber(r.oplaty_celne_razem);
+    const mass = parseLocaleNumber(r.masa_netto);
+    const coef = fees != null && mass != null && mass !== 0 ? fees / mass : null;
+    const rowIdRaw = Number(r.id);
+    const rowId = Number.isFinite(rowIdRaw) ? rowIdRaw : 0;
+    const verifiedManual = rowId > 0 ? manual.has(rowId) : false;
+    return {
+      rowId,
+      data_mrn: r.data_mrn ?? null,
+      numer_mrn: r.numer_mrn ?? null,
+      odbiorca: r.odbiorca ?? null,
+      key: toValidationKey(r),
+      coef,
+      verifiedManual,
+      checkable: false,
+      outlier: false,
+      outlierSide: null as 'low' | 'high' | null,
+    };
+  });
+
+  computeIqrFlags(items);
+
+  const filter: ValidationDayFilter =
+    params.filter === 'outliersHigh' || params.filter === 'outliersLow' || params.filter === 'singles' ? params.filter : 'all';
+  const totals = {
+    all: items.length,
+    outliersHigh: items.filter((it) => it.outlierSide === 'high').length,
+    outliersLow: items.filter((it) => it.outlierSide === 'low').length,
+    singles: items.filter((it) => !it.verifiedManual && it.coef != null && Number.isFinite(it.coef) && !it.checkable).length,
+    verifiedManual: items.filter((it) => it.verifiedManual).length,
+  };
+
+  let filtered = items;
+  if (filter === 'outliersHigh') filtered = items.filter((it) => it.outlierSide === 'high');
+  else if (filter === 'outliersLow') filtered = items.filter((it) => it.outlierSide === 'low');
+  else if (filter === 'singles')
+    filtered = items.filter((it) => !it.verifiedManual && it.coef != null && Number.isFinite(it.coef) && !it.checkable);
+
+  filtered.sort(
+    (a, b) =>
+      String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+      String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+  );
+
+  return {
+    date,
+    totals,
+    items: filtered.map((it) => ({
+      rowId: it.rowId,
+      data_mrn: it.data_mrn,
+      numer_mrn: it.numer_mrn,
+      odbiorca: it.odbiorca,
+      key: it.key,
+      coef: it.coef,
+      verifiedManual: it.verifiedManual,
+      checkable: it.checkable,
+      outlier: it.outlier,
+      outlierSide: it.outlierSide,
+    })),
+  };
 }

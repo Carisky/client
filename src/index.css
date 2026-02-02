@@ -414,6 +414,12 @@ details.row-accordion > summary::-webkit-details-marker {
   white-space: nowrap;
 }
 
+.mini-table th.manual-col,
+.mini-table td.manual-col {
+  text-align: right;
+  width: 1%;
+}
+
 .mini-table th {
   color: var(--muted);
   font-weight: 600;
@@ -429,14 +435,110 @@ details.row-accordion > summary::-webkit-details-marker {
   background: rgba(249, 115, 22, 0.18);
 }
 
-.coef-cell {
-  display: flex;
+.section-title {
+  margin: 10px 2px 8px;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.dash-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 6px;
+}
+
+.dash-card {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.25);
+  padding: 10px 12px;
+}
+
+.dash-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dash-value {
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.badge-slate {
+  border-color: rgba(148, 163, 184, 0.32);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.badge-orange {
+  border-color: rgba(249, 115, 22, 0.45);
+  background: rgba(249, 115, 22, 0.18);
+}
+
+.day-badge[data-zero='1'] {
+  display: none;
+}
+
+.day-count {
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
+  min-width: 42px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
+
+.day-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 10px;
+}
+
+.btn-small {
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.ghost.active {
+  border-color: rgba(79, 70, 229, 0.55);
+  background: rgba(79, 70, 229, 0.2);
+}
+
+.single-tag {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.25);
+  color: var(--muted);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  margin-left: 10px;
+}
+
+.coef-cell {
+  align-items: center;
+}
+
+.coef-meta {
+  flex: 0 0 86px;
+  display: inline-flex;
+  align-items: center;
+
   gap: 8px;
 }
 
 .coef-arrow {
+  margin-left: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -7,6 +7,9 @@ import type {
   MrnBatchRows,
   RaportMeta,
   RaportPage,
+  ValidationDashboard,
+  ValidationDayFilter,
+  ValidationDayItems,
   ValidationGroupKey,
   ValidationGroups,
   ValidationItems,
@@ -31,6 +34,9 @@ declare global {
       getValidationDefaultMonth: () => Promise<{ month: string | null }>;
       getValidationGroups: (month: string) => Promise<ValidationGroups>;
       getValidationItems: (month: string, key: ValidationGroupKey) => Promise<ValidationItems>;
+      getValidationDashboard: (month: string) => Promise<ValidationDashboard>;
+      getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter) => Promise<ValidationDayItems>;
+      setValidationManualVerified: (rowId: number, verified: boolean) => Promise<{ ok: true }>;
     };
   }
 }
