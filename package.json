@@ -1,7 +1,7 @@
 {
   "name": "client",
   "productName": "client",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Appliction for validate sad data",
   "main": ".webpack/main",
   "private": true,
