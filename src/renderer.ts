@@ -73,15 +73,6 @@ const els = {
   validationGrouping: document.getElementById(
     "validation-grouping",
   ) as HTMLSelectElement,
-  btnValidationOffsetLeft: document.getElementById(
-    "btn-validation-offset-left",
-  ) as HTMLButtonElement,
-  btnValidationOffsetReset: document.getElementById(
-    "btn-validation-offset-reset",
-  ) as HTMLButtonElement,
-  btnValidationOffsetRight: document.getElementById(
-    "btn-validation-offset-right",
-  ) as HTMLButtonElement,
   validationMrnFilter: document.getElementById(
     "validation-mrn-filter",
   ) as HTMLInputElement,
@@ -726,9 +717,6 @@ type ValidationDateGrouping =
   | "months2";
 
 const VALIDATION_GROUPING_STORAGE_KEY = "validationGrouping";
-const VALIDATION_GROUPING_OFFSET_STORAGE_KEY = "validationGroupingOffsetDays";
-
-let validationGroupingOffsetDays = 0;
 
 function normalizeValidationDateGrouping(value: unknown): ValidationDateGrouping {
   const v = String(value ?? "").trim();
@@ -740,40 +728,15 @@ function normalizeValidationDateGrouping(value: unknown): ValidationDateGrouping
   return "day";
 }
 
-function clampInt(n: number, min: number, max: number): number {
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max, Math.trunc(n)));
-}
-
-function formatOffsetDays(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return "0d";
-  return n > 0 ? `+${n}d` : `${n}d`;
-}
-
-function getValidationGroupingOptions(): { grouping: ValidationDateGrouping; offsetDays: number } {
+function getValidationGroupingOptions(): { grouping: ValidationDateGrouping } {
   const grouping = normalizeValidationDateGrouping(els.validationGrouping?.value);
-  return { grouping, offsetDays: validationGroupingOffsetDays };
+  return { grouping };
 }
 
 function setValidationGroupingValue(value: ValidationDateGrouping): void {
   els.validationGrouping.value = value;
   try {
     localStorage.setItem(VALIDATION_GROUPING_STORAGE_KEY, value);
-  } catch {
-    // ignore
-  }
-}
-
-function setValidationGroupingOffsetDays(value: number): void {
-  validationGroupingOffsetDays = clampInt(value, -62, 62);
-  els.btnValidationOffsetReset.textContent = formatOffsetDays(
-    validationGroupingOffsetDays,
-  );
-  try {
-    localStorage.setItem(
-      VALIDATION_GROUPING_OFFSET_STORAGE_KEY,
-      String(validationGroupingOffsetDays),
-    );
   } catch {
     // ignore
   }
@@ -1255,6 +1218,7 @@ async function refreshValidation() {
       window.api.getValidationGroups(
         period,
         getValidationMrnFilterValue() || undefined,
+        getValidationGroupingOptions(),
       ),
       window.api.getValidationOutlierErrors(
         period,
@@ -1531,28 +1495,13 @@ try {
   if (savedGrouping) {
     els.validationGrouping.value = normalizeValidationDateGrouping(savedGrouping);
   }
-  const savedOffset = localStorage.getItem(VALIDATION_GROUPING_OFFSET_STORAGE_KEY);
-  const parsedOffset = Number.parseInt(String(savedOffset ?? "0"), 10);
-  setValidationGroupingOffsetDays(Number.isFinite(parsedOffset) ? parsedOffset : 0);
 } catch {
-  setValidationGroupingOffsetDays(0);
+  // ignore
 }
 
 els.validationGrouping.addEventListener("change", () => {
   const v = normalizeValidationDateGrouping(els.validationGrouping.value);
   setValidationGroupingValue(v);
-  void refreshValidation();
-});
-els.btnValidationOffsetLeft.addEventListener("click", () => {
-  setValidationGroupingOffsetDays(validationGroupingOffsetDays - 1);
-  void refreshValidation();
-});
-els.btnValidationOffsetRight.addEventListener("click", () => {
-  setValidationGroupingOffsetDays(validationGroupingOffsetDays + 1);
-  void refreshValidation();
-});
-els.btnValidationOffsetReset.addEventListener("click", () => {
-  setValidationGroupingOffsetDays(0);
   void refreshValidation();
 });
 

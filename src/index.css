@@ -786,11 +786,6 @@ details.row-accordion > summary::-webkit-details-marker {
   gap: 10px;
 }
 
-.coef-value {
-  flex: 1;
-  text-align: right;
-}
-
 .coef-meta {
   flex: 0 0 86px;
   display: inline-flex;

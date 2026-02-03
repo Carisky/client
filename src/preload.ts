@@ -88,7 +88,7 @@ export type ValidationDayFilter = 'all' | 'outliersHigh' | 'outliersLow' | 'sing
 
 export type ValidationDateGrouping = 'day' | 'days2' | 'days3' | 'week' | 'month' | 'months2';
 
-export type ValidationGroupingOptions = { grouping?: ValidationDateGrouping; offsetDays?: number };
+export type ValidationGroupingOptions = { grouping?: ValidationDateGrouping };
 
 export type ValidationDayItems = {
   date: string;
@@ -170,16 +170,16 @@ contextBridge.exposeInMainWorld('api', {
   getMrnBatchRows: (numerMrn: string): Promise<MrnBatchRows> => ipcRenderer.invoke('mrnBatch:rows', { numerMrn }),
 
   getValidationDefaultMonth: (): Promise<{ month: string | null }> => ipcRenderer.invoke('validation:defaultMonth'),
-  getValidationGroups: (month: string, mrn?: string): Promise<ValidationGroups> =>
-    ipcRenderer.invoke('validation:groups', { month, mrn }),
+  getValidationGroups: (month: string, mrn?: string, options?: ValidationGroupingOptions): Promise<ValidationGroups> =>
+    ipcRenderer.invoke('validation:groups', { month, mrn, grouping: options?.grouping }),
   getValidationItems: (month: string, key: ValidationGroupKey, mrn?: string, options?: ValidationGroupingOptions): Promise<ValidationItems> =>
-    ipcRenderer.invoke('validation:items', { month, key, mrn, grouping: options?.grouping, offsetDays: options?.offsetDays }),
+    ipcRenderer.invoke('validation:items', { month, key, mrn, grouping: options?.grouping }),
   getValidationDashboard: (month: string, mrn?: string, options?: ValidationGroupingOptions): Promise<ValidationDashboard> =>
-    ipcRenderer.invoke('validation:dashboard', { month, mrn, grouping: options?.grouping, offsetDays: options?.offsetDays }),
+    ipcRenderer.invoke('validation:dashboard', { month, mrn, grouping: options?.grouping }),
   getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter, mrn?: string, options?: ValidationGroupingOptions): Promise<ValidationDayItems> =>
-    ipcRenderer.invoke('validation:dayItems', { month, date, filter, mrn, grouping: options?.grouping, offsetDays: options?.offsetDays }),
+    ipcRenderer.invoke('validation:dayItems', { month, date, filter, mrn, grouping: options?.grouping }),
   getValidationOutlierErrors: (month: string, mrn?: string, options?: ValidationGroupingOptions): Promise<ValidationOutlierErrors> =>
-    ipcRenderer.invoke('validation:outlierErrors', { month, mrn, grouping: options?.grouping, offsetDays: options?.offsetDays }),
+    ipcRenderer.invoke('validation:outlierErrors', { month, mrn, grouping: options?.grouping }),
   setValidationManualVerified: (rowId: number, verified: boolean): Promise<{ ok: true }> =>
     ipcRenderer.invoke('validation:setManualVerified', { rowId, verified }),
 

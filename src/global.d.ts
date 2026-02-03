@@ -37,7 +37,7 @@ declare global {
       getMrnBatchRows: (numerMrn: string) => Promise<MrnBatchRows>;
 
       getValidationDefaultMonth: () => Promise<{ month: string | null }>;
-      getValidationGroups: (month: string, mrn?: string) => Promise<ValidationGroups>;
+      getValidationGroups: (month: string, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationGroups>;
       getValidationItems: (month: string, key: ValidationGroupKey, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationItems>;
       getValidationDashboard: (month: string, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationDashboard>;
       getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationDayItems>;

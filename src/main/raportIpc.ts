@@ -61,28 +61,27 @@ export function registerRaportIpc(): void {
   ipcMain.handle('mrnBatch:rows', async (_evt, args: { numerMrn: string }) => getMrnBatchRows(args?.numerMrn));
 
   ipcMain.handle('validation:defaultMonth', async () => getValidationDefaultMonth());
-  ipcMain.handle('validation:groups', async (_evt, args: { month: string; mrn?: string }) =>
-    getValidationGroups({ month: args?.month, mrn: args?.mrn }),
+  ipcMain.handle('validation:groups', async (_evt, args: { month: string; mrn?: string; grouping?: unknown }) =>
+    getValidationGroups({ month: args?.month, mrn: args?.mrn, grouping: args?.grouping as never }),
   );
-  ipcMain.handle('validation:items', async (_evt, args: { month: string; key: unknown; mrn?: string; grouping?: unknown; offsetDays?: unknown }) =>
-    getValidationItems({ month: args?.month, key: args?.key as never, mrn: args?.mrn, grouping: args?.grouping as never, offsetDays: args?.offsetDays as never }),
+  ipcMain.handle('validation:items', async (_evt, args: { month: string; key: unknown; mrn?: string; grouping?: unknown }) =>
+    getValidationItems({ month: args?.month, key: args?.key as never, mrn: args?.mrn, grouping: args?.grouping as never }),
   );
 
-  ipcMain.handle('validation:dashboard', async (_evt, args: { month: string; mrn?: string; grouping?: unknown; offsetDays?: unknown }) =>
-    getValidationDashboard({ month: args?.month, mrn: args?.mrn, grouping: args?.grouping as never, offsetDays: args?.offsetDays as never }),
+  ipcMain.handle('validation:dashboard', async (_evt, args: { month: string; mrn?: string; grouping?: unknown }) =>
+    getValidationDashboard({ month: args?.month, mrn: args?.mrn, grouping: args?.grouping as never }),
   );
-  ipcMain.handle('validation:dayItems', async (_evt, args: { month: string; date: string; filter: unknown; mrn?: string; grouping?: unknown; offsetDays?: unknown }) =>
+  ipcMain.handle('validation:dayItems', async (_evt, args: { month: string; date: string; filter: unknown; mrn?: string; grouping?: unknown }) =>
     getValidationDayItems({
       month: args?.month,
       date: args?.date,
       filter: (args?.filter as never) ?? 'all',
       mrn: args?.mrn,
       grouping: args?.grouping as never,
-      offsetDays: args?.offsetDays as never,
     }),
   );
-  ipcMain.handle('validation:outlierErrors', async (_evt, args: { month: string; mrn?: string; grouping?: unknown; offsetDays?: unknown }) =>
-    getValidationOutlierErrors({ month: args?.month, mrn: args?.mrn, grouping: args?.grouping as never, offsetDays: args?.offsetDays as never }),
+  ipcMain.handle('validation:outlierErrors', async (_evt, args: { month: string; mrn?: string; grouping?: unknown }) =>
+    getValidationOutlierErrors({ month: args?.month, mrn: args?.mrn, grouping: args?.grouping as never }),
   );
   ipcMain.handle('validation:setManualVerified', async (_evt, args: { rowId: number; verified: boolean }) =>
     setValidationManualVerified({ rowId: args?.rowId, verified: Boolean(args?.verified) }),
