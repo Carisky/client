@@ -730,48 +730,107 @@ export async function getValidationDefaultMonth(): Promise<{ month: string | nul
 }
 
 async function queryValidationRepresentativeRows(client: PrismaClient, range: { start: string; end: string }) {
-  return (await client.$queryRawUnsafe(
+  type ValidationSadRawRow = {
+    id: number;
+    data_mrn: string | null;
+    numer_mrn: string | null;
+    nr_sad: string | null;
+    zglaszajacy: string | null;
+    odbiorca: string | null;
+    kraj_wysylki: string | null;
+    warunki_dostawy: string | null;
+    waluta: string | null;
+    kurs_waluty: string | null;
+    transport_na_granicy_rodzaj: string | null;
+    kod_towaru: string | null;
+    wartosc_faktury: string | null;
+    wartosc_pozycji: string | null;
+    oplaty_celne_razem: string | null;
+    masa_netto: string | null;
+  };
+
+  type ValidationSadTextField = Exclude<
+    keyof ValidationSadRawRow,
+    'id' | 'wartosc_faktury' | 'wartosc_pozycji' | 'oplaty_celne_razem' | 'masa_netto'
+  >;
+  type ValidationSadNumericField = 'wartosc_faktury' | 'wartosc_pozycji' | 'oplaty_celne_razem' | 'masa_netto';
+
+  const raw = (await client.$queryRawUnsafe(
     `
-      WITH rep AS (
-        SELECT
-          "id",
-          "data_mrn",
-          "numer_mrn",
-          "nr_sad",
-          "zglaszajacy",
-          "odbiorca",
-          "kraj_wysylki",
-          "warunki_dostawy",
-          "waluta",
-          "kurs_waluty",
-          "transport_na_granicy_rodzaj",
-          "kod_towaru",
-          "oplaty_celne_razem",
-          "masa_netto",
-          ROW_NUMBER() OVER (
-            PARTITION BY TRIM(COALESCE("numer_mrn", '')), TRIM(COALESCE("nr_sad", ''))
-            ORDER BY
-              CASE
-                WHEN "wartosc_pozycji" IS NOT NULL AND TRIM("wartosc_pozycji") <> '' THEN 0
-                WHEN "wartosc_faktury" IS NOT NULL AND TRIM("wartosc_faktury") <> '' THEN 1
-                ELSE 2
-              END,
-              "id" ASC
-          ) as "rn"
-        FROM "raport_rows"
-        WHERE "data_mrn" IS NOT NULL
-          AND TRIM("data_mrn") <> ''
-          AND TRIM("data_mrn") BETWEEN ? AND ?
-          AND "numer_mrn" IS NOT NULL AND TRIM("numer_mrn") <> ''
-          AND "nr_sad" IS NOT NULL AND TRIM("nr_sad") <> ''
-      )
-      SELECT *
-      FROM rep
-      WHERE "rn" = 1;
+      SELECT
+        "id",
+        "data_mrn",
+        "numer_mrn",
+        "nr_sad",
+        "zglaszajacy",
+        "odbiorca",
+        "kraj_wysylki",
+        "warunki_dostawy",
+        "waluta",
+        "kurs_waluty",
+        "transport_na_granicy_rodzaj",
+        "kod_towaru",
+        "wartosc_faktury",
+        "wartosc_pozycji",
+        "oplaty_celne_razem",
+        "masa_netto"
+      FROM "raport_rows"
+      WHERE "data_mrn" IS NOT NULL
+        AND TRIM("data_mrn") <> ''
+        AND TRIM("data_mrn") BETWEEN ? AND ?
+        AND "numer_mrn" IS NOT NULL AND TRIM("numer_mrn") <> ''
+        AND "nr_sad" IS NOT NULL AND TRIM("nr_sad") <> '';
     `,
     range.start,
     range.end,
-  )) as Array<{
+  )) as ValidationSadRawRow[];
+
+  // SAD może być wielopozycyjny (ten sam nr_sad pojawia się wiele razy).
+  // Na potrzeby IQR agregujemy wartości liczbowe (np. masa_netto, opłaty) w jedną pozycję na (numer_mrn + nr_sad).
+  const groupKey = (r: { numer_mrn: string | null; nr_sad: string | null }): string =>
+    `${String(r.numer_mrn ?? '').trim()}|${String(r.nr_sad ?? '').trim()}`;
+
+  const hasValue = (v: string | null | undefined): boolean => String(v ?? '').trim().length > 0;
+
+  const repRank = (r: { wartosc_pozycji: string | null; wartosc_faktury: string | null }): number => {
+    if (hasValue(r.wartosc_pozycji)) return 0;
+    if (hasValue(r.wartosc_faktury)) return 1;
+    return 2;
+  };
+
+  const mergeTextField = (rows: ValidationSadRawRow[], field: ValidationSadTextField): string | null => {
+    const values = new Set<string>();
+    for (const r of rows) {
+      const v = String(r[field] ?? '').trim();
+      if (!v) continue;
+      values.add(v);
+      if (values.size > 1) return 'MULTI';
+    }
+    return values.size === 1 ? Array.from(values)[0] : null;
+  };
+
+  const sumNumericField = (rows: ValidationSadRawRow[], field: ValidationSadNumericField): string | null => {
+    let sum = 0;
+    let any = false;
+    for (const r of rows) {
+      const n = parseLocaleNumber(r[field]);
+      if (n == null || !Number.isFinite(n)) continue;
+      sum += n;
+      any = true;
+    }
+    return any ? String(sum) : null;
+  };
+
+  const bySad = new Map<string, ValidationSadRawRow[]>();
+  for (const r of raw) {
+    const k = groupKey(r);
+    if (!k || k === '|') continue;
+    const arr = bySad.get(k);
+    if (arr) arr.push(r);
+    else bySad.set(k, [r]);
+  }
+
+  const aggregated: Array<{
     id: number;
     data_mrn: string | null;
     numer_mrn: string | null;
@@ -786,8 +845,32 @@ async function queryValidationRepresentativeRows(client: PrismaClient, range: { 
     kod_towaru: string | null;
     oplaty_celne_razem: string | null;
     masa_netto: string | null;
-    rn: number;
-  }>;
+  }> = [];
+
+  for (const rows of bySad.values()) {
+    rows.sort((a, b) => repRank(a) - repRank(b) || a.id - b.id);
+    const rep = rows[0];
+
+    aggregated.push({
+      id: rep.id,
+      data_mrn: rep.data_mrn ?? null,
+      numer_mrn: rep.numer_mrn ?? null,
+      nr_sad: rep.nr_sad ?? null,
+      // agent/odbiorca/... zwykle są stałe; jeśli jednak różnią się w pozycjach, ustawiamy "MULTI"
+      zglaszajacy: mergeTextField(rows, 'zglaszajacy'),
+      odbiorca: mergeTextField(rows, 'odbiorca'),
+      kraj_wysylki: mergeTextField(rows, 'kraj_wysylki'),
+      warunki_dostawy: mergeTextField(rows, 'warunki_dostawy'),
+      waluta: mergeTextField(rows, 'waluta'),
+      kurs_waluty: mergeTextField(rows, 'kurs_waluty'),
+      transport_na_granicy_rodzaj: mergeTextField(rows, 'transport_na_granicy_rodzaj'),
+      kod_towaru: mergeTextField(rows, 'kod_towaru'),
+      oplaty_celne_razem: sumNumericField(rows, 'oplaty_celne_razem'),
+      masa_netto: sumNumericField(rows, 'masa_netto'),
+    });
+  }
+
+  return aggregated;
 }
 
 export async function getValidationGroups(params: {
