@@ -1,6 +1,8 @@
 import { app, dialog, ipcMain, shell } from 'electron';
+import * as path from 'path';
 import {
   clearRaportData,
+  exportValidationWynikiToXlsx,
   getDbInfo,
   getMrnBatchGroups,
   getMrnBatchMeta,
@@ -86,6 +88,40 @@ export function registerRaportIpc(): void {
   ipcMain.handle('validation:setManualVerified', async (_evt, args: { rowId: number; verified: boolean }) =>
     setValidationManualVerified({ rowId: args?.rowId, verified: Boolean(args?.verified) }),
   );
+  ipcMain.handle('validation:exportXlsx', async (_evt, args: { period: string; mrn?: string; grouping?: unknown }) => {
+    const period = String(args?.period ?? '').trim();
+    const grouping = String(args?.grouping ?? 'day').trim();
+    const mrn = String(args?.mrn ?? '').trim();
+
+    const safePart = (v: string) =>
+      v
+        .replace(/[\\/:*?"<>|]+/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80);
+
+    const fileName = `Wyniki_${safePart(period || 'okres')}_${safePart(grouping || 'day')}${mrn ? `_MRN_${safePart(mrn)}` : ''}.xlsx`;
+    const defaultPath = path.join(app.getPath('downloads'), fileName);
+
+    const res = await dialog.showSaveDialog({
+      title: 'Eksportuj Wyniki (IQR) do Excel',
+      defaultPath,
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+    });
+
+    if (res.canceled || !res.filePath) return { ok: false, canceled: true };
+    try {
+      await exportValidationWynikiToXlsx({
+        period,
+        mrn: mrn || undefined,
+        grouping: args?.grouping,
+        filePath: res.filePath,
+      });
+      return { ok: true, filePath: res.filePath };
+    } catch (e: unknown) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
 
   ipcMain.handle('app:version', async () => ({ version: app.getVersion() }));
   ipcMain.handle('updates:check', async () => checkForUpdates());

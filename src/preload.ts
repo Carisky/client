@@ -126,6 +126,13 @@ export type ValidationOutlierErrors = {
   items: ValidationOutlierError[];
 };
 
+export type ValidationExportResult = {
+  ok: boolean;
+  canceled?: boolean;
+  filePath?: string;
+  error?: string;
+};
+
 export type UpdateCheckResult = {
   supported: boolean;
   updateAvailable: boolean;
@@ -182,6 +189,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('validation:outlierErrors', { month, mrn, grouping: options?.grouping }),
   setValidationManualVerified: (rowId: number, verified: boolean): Promise<{ ok: true }> =>
     ipcRenderer.invoke('validation:setManualVerified', { rowId, verified }),
+  exportValidationXlsx: (period: string, mrn?: string, options?: ValidationGroupingOptions): Promise<ValidationExportResult> =>
+    ipcRenderer.invoke('validation:exportXlsx', { period, mrn, grouping: options?.grouping }),
 
   getAppVersion: (): Promise<{ version: string }> => ipcRenderer.invoke('app:version'),
   checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),

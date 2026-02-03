@@ -82,6 +82,9 @@ const els = {
   btnValidationRefresh: document.getElementById(
     "btn-validation-refresh",
   ) as HTMLButtonElement,
+  btnValidationExport: document.getElementById(
+    "btn-validation-export",
+  ) as HTMLButtonElement,
   validationMeta: document.getElementById("validation-meta") as HTMLElement,
   validationGroups: document.getElementById("validation-groups") as HTMLElement,
   validationStatus: document.getElementById("validation-status") as HTMLElement,
@@ -1482,6 +1485,41 @@ els.btnValidationRefresh.addEventListener(
   "click",
   () => void refreshValidation(),
 );
+els.btnValidationExport.addEventListener("click", async () => {
+  const period = getValidationPeriodValue();
+  if (!period) {
+    setStatus(els.validationStatus, "Wybierz miesiД…c lub rok.");
+    return;
+  }
+
+  els.btnValidationExport.disabled = true;
+  setStatus(els.validationStatus, "Eksportowanie do Excel...");
+  setBusy(true);
+  try {
+    const mrn = getValidationMrnFilterValue() || undefined;
+    const res = await window.api.exportValidationXlsx(
+      period,
+      mrn,
+      getValidationGroupingOptions(),
+    );
+    if (res?.ok) {
+      const fp = res.filePath ? ` ${res.filePath}` : "";
+      setStatus(els.validationStatus, `Zapisano.${fp}`);
+    } else if (res?.canceled) {
+      setStatus(els.validationStatus, "Anulowano.");
+    } else {
+      setStatus(
+        els.validationStatus,
+        `BЕ‚Д…d eksportu: ${String(res?.error ?? "unknown")}`,
+      );
+    }
+  } catch (e: unknown) {
+    setStatus(els.validationStatus, `BЕ‚Д…d eksportu: ${errorMessage(e)}`);
+  } finally {
+    els.btnValidationExport.disabled = false;
+    setBusy(false);
+  }
+});
 els.validationPeriod.addEventListener("change", () => {
   updateValidationPeriodUi();
   void refreshValidation();

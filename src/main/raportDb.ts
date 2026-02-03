@@ -1553,3 +1553,466 @@ export async function getValidationOutlierErrors(params: { month: string; mrn?: 
 
   return { range, items: outliers };
 }
+
+type ValidationIqrBounds = {
+  q1: number;
+  q3: number;
+  iqr: number;
+  lower: number;
+  upper: number;
+};
+
+function computeIqrBoundsAndFlags(items: Array<ValidationComputedItem & { _boundsKey: string }>): Map<string, ValidationIqrBounds> {
+  const groupDay = new Map<string, number[]>();
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (!it.bucketStart) continue;
+    if (it.verifiedManual) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    const k = it._boundsKey;
+    const arr = groupDay.get(k);
+    if (arr) arr.push(i);
+    else groupDay.set(k, [i]);
+  }
+
+  const bounds = new Map<string, ValidationIqrBounds>();
+  for (const [k, indices] of groupDay.entries()) {
+    if (indices.length < 2) continue;
+    const valuesAsc = indices
+      .map((i) => items[i].coef as number)
+      .filter((v) => Number.isFinite(v))
+      .sort((a, b) => a - b);
+    if (valuesAsc.length < 2) continue;
+
+    const q1 = quantileSorted(valuesAsc, 0.25);
+    const q3 = quantileSorted(valuesAsc, 0.75);
+    const iqr = q3 - q1;
+    if (!Number.isFinite(iqr)) continue;
+    const lower = q1 - 1.5 * iqr;
+    const upper = q3 + 1.5 * iqr;
+
+    bounds.set(k, { q1, q3, iqr, lower, upper });
+
+    for (const i of indices) {
+      const v = items[i].coef;
+      if (v == null || !Number.isFinite(v)) continue;
+      items[i].checkable = true;
+      if (v < lower) {
+        items[i].outlier = true;
+        items[i].outlierSide = 'low';
+      } else if (v > upper) {
+        items[i].outlier = true;
+        items[i].outlierSide = 'high';
+      } else {
+        items[i].outlier = false;
+        items[i].outlierSide = null;
+      }
+    }
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.verifiedManual) {
+      it.checkable = false;
+      it.outlier = false;
+      it.outlierSide = null;
+      continue;
+    }
+    if (!it.bucketStart) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    if (!it.checkable) {
+      it.outlier = false;
+      it.outlierSide = null;
+    }
+  }
+
+  return bounds;
+}
+
+function a1(row1: number, col0 = 0): string {
+  return xlsx.utils.encode_cell({ r: Math.max(0, row1 - 1), c: Math.max(0, col0) });
+}
+
+function addSectionTitle(ws: xlsx.WorkSheet, title: string, row1: number): number {
+  xlsx.utils.sheet_add_aoa(ws, [[title]], { origin: a1(row1, 0) });
+  return row1 + 1;
+}
+
+function addKeyValueMeta(ws: xlsx.WorkSheet, meta: Array<[string, string | number | null | undefined]>, row1: number): number {
+  const rows = meta.map(([k, v]) => [k, v == null ? '' : v]);
+  xlsx.utils.sheet_add_aoa(ws, rows, { origin: a1(row1, 0) });
+  return row1 + rows.length;
+}
+
+function addJsonTable(ws: xlsx.WorkSheet, rows: Array<Record<string, unknown>>, row1: number): number {
+  if (!rows.length) {
+    xlsx.utils.sheet_add_aoa(ws, [['Brak danych']], { origin: a1(row1, 0) });
+    return row1 + 1;
+  }
+  xlsx.utils.sheet_add_json(ws, rows, { origin: a1(row1, 0), skipHeader: false });
+  return row1 + rows.length + 1;
+}
+
+export async function exportValidationWynikiToXlsx(params: {
+  period: string;
+  mrn?: string | null;
+  grouping?: unknown;
+  filePath: string;
+}): Promise<{ ok: true }> {
+  const client = await getPrisma();
+  const range = toYmdRange(params.period);
+  const { grouping } = getValidationGroupingConfig(params);
+  const anchor = range.start;
+  const rows = await queryValidationRepresentativeRows(client, range);
+  const manual = await getValidationManualSet(client);
+
+  type ExportItem = ValidationComputedItem & {
+    nr_sad: string | null;
+    agent_celny: string | null;
+    fees: number | null;
+    mass: number | null;
+    bucketEnd: string | null;
+    _boundsKey: string;
+  };
+
+  const items: ExportItem[] = rows.map((r) => {
+    const fees = parseLocaleNumber(r.oplaty_celne_razem);
+    const mass = parseLocaleNumber(r.masa_netto);
+    const coef = fees != null && mass != null && mass !== 0 ? fees / mass : null;
+    const rowIdRaw = Number(r.id);
+    const rowId = Number.isFinite(rowIdRaw) ? rowIdRaw : 0;
+    const verifiedManual = rowId > 0 ? manual.has(rowId) : false;
+    const data_mrn = r.data_mrn ?? null;
+    const bucketStart = data_mrn ? bucketStartForDate(data_mrn, anchor, grouping) : null;
+    const key = toValidationKey(r);
+    const boundsKey = bucketStart ? `${JSON.stringify(key)}|${bucketStart}` : `${JSON.stringify(key)}|`;
+    return {
+      rowId,
+      data_mrn,
+      bucketStart,
+      bucketEnd: bucketStart ? bucketEndFromStart(bucketStart, grouping) : null,
+      numer_mrn: r.numer_mrn ?? null,
+      nr_sad: r.nr_sad ?? null,
+      agent_celny: r.zglaszajacy ?? null,
+      odbiorca: r.odbiorca ?? null,
+      key,
+      fees,
+      mass,
+      coef,
+      verifiedManual,
+      checkable: false,
+      outlier: false,
+      outlierSide: null as 'low' | 'high' | null,
+      _boundsKey: boundsKey,
+    };
+  });
+
+  const bounds = computeIqrBoundsAndFlags(items);
+
+  const mrnNorm = normalizeMrnQuery(params.mrn);
+  const base = mrnNorm ? filterToMrnCohorts(items, mrnNorm) : items;
+
+  const dayMap = new Map<
+    string,
+    { date: string; end: string; outliersHigh: number; outliersLow: number; singles: number; total: number }
+  >();
+  let verifiedManual = 0;
+  for (const it of base) {
+    if (it.verifiedManual) verifiedManual += 1;
+    if (!it.bucketStart) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    const date = it.bucketStart;
+    const end = it.bucketEnd ?? date;
+    const agg = dayMap.get(date) ?? { date, end, outliersHigh: 0, outliersLow: 0, singles: 0, total: 0 };
+    if (!it.verifiedManual) agg.total += 1;
+    if (it.outlierSide === 'high') agg.outliersHigh += 1;
+    if (it.outlierSide === 'low') agg.outliersLow += 1;
+    if (!it.verifiedManual && !it.checkable) agg.singles += 1;
+    dayMap.set(date, agg);
+  }
+  const days = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const stats = {
+    outliersHigh: days.reduce((s, d) => s + d.outliersHigh, 0),
+    outliersLow: days.reduce((s, d) => s + d.outliersLow, 0),
+    singles: days.reduce((s, d) => s + d.singles, 0),
+    verifiedManual,
+  };
+
+  const groupMap = new Map<string, { key: ValidationGroupKey; count: number }>();
+  for (const it of base) {
+    const k = JSON.stringify(it.key);
+    const existing = groupMap.get(k);
+    if (existing) existing.count += 1;
+    else groupMap.set(k, { key: it.key, count: 1 });
+  }
+  const groups = Array.from(groupMap.values()).sort((a, b) => b.count - a.count);
+
+  const outliers = base
+    .filter((it) => it.outlierSide && it.coef != null && Number.isFinite(it.coef) && it.bucketStart)
+    .map((it) => {
+      const b = bounds.get(it._boundsKey);
+      const limit = b ? (it.outlierSide === 'high' ? b.upper : b.lower) : null;
+      return {
+        ...it,
+        bound: b ?? null,
+        limit,
+        discrepancyPct: limit == null ? null : computeDiscrepancyPct(it.coef as number, limit),
+      };
+    });
+
+  outliers.sort(
+    (a, b) =>
+      String(a.agent_celny ?? '').localeCompare(String(b.agent_celny ?? '')) ||
+      (b.discrepancyPct ?? -1) - (a.discrepancyPct ?? -1) ||
+      String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+      String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+  );
+
+  const agentMap = new Map<string, { agent: string; total: number; high: number; low: number }>();
+  for (const o of outliers) {
+    const agent = String(o.agent_celny ?? '').trim() || '—';
+    const agg = agentMap.get(agent) ?? { agent, total: 0, high: 0, low: 0 };
+    agg.total += 1;
+    if (o.outlierSide === 'high') agg.high += 1;
+    if (o.outlierSide === 'low') agg.low += 1;
+    agentMap.set(agent, agg);
+  }
+  const agents = Array.from(agentMap.values()).sort((a, b) => b.total - a.total || a.agent.localeCompare(b.agent));
+
+  const exportedAt = new Date().toISOString();
+  const metaRows: Array<[string, string | number | null | undefined]> = [
+    ['Raport', 'Wyniki (IQR)'],
+    ['ExportedAt', exportedAt],
+    ['Period', params.period],
+    ['RangeStart', range.start],
+    ['RangeEnd', range.end],
+    ['Grouping', grouping],
+    ['MRN filter', params.mrn ?? ''],
+    ['Coef formula', 'oplaty_celne_razem / masa_netto'],
+    ['IQR rule', 'lower=Q1-1.5*IQR, upper=Q3+1.5*IQR'],
+    ['OutliersHigh', stats.outliersHigh],
+    ['OutliersLow', stats.outliersLow],
+    ['Singles', stats.singles],
+    ['ManualVerified', stats.verifiedManual],
+    ['ItemsTotal', base.length],
+  ];
+
+  const wb = xlsx.utils.book_new();
+
+  // Osoby
+  const wsOsoby = xlsx.utils.aoa_to_sheet([]);
+  let r1 = 1;
+  r1 = addKeyValueMeta(wsOsoby, metaRows, r1);
+  r1 += 1;
+  r1 = addSectionTitle(wsOsoby, 'Osoby (podsumowanie)', r1);
+  r1 = addJsonTable(
+    wsOsoby,
+    agents.map((a) => ({ Agent: a.agent, Errors: a.total, High: a.high, Low: a.low })),
+    r1,
+  );
+  r1 += 1;
+  r1 = addSectionTitle(wsOsoby, 'Osoby (lista bledow / odchylen)', r1);
+  r1 = addJsonTable(
+    wsOsoby,
+    outliers.map((o) => {
+      const b = o.bound as ValidationIqrBounds | null;
+      const key = o.key;
+      return {
+        Agent: String(o.agent_celny ?? '').trim() || '—',
+        DataMRN: o.data_mrn,
+        MRN: o.numer_mrn,
+        NrSAD: o.nr_sad,
+        Odbiorca: key?.odbiorca ?? '',
+        KodTowaru: key?.kod_towaru ?? '',
+        Waluta: key?.waluta ?? '',
+        KursWaluty: key?.kurs_waluty ?? '',
+        WarunkiDostawy: key?.warunki_dostawy ?? '',
+        KrajWysylki: key?.kraj_wysylki ?? '',
+        TransportRodzaj: key?.transport_na_granicy_rodzaj ?? '',
+        OplatyCelneRazem: o.fees,
+        MasaNetto: o.mass,
+        Coef: o.coef,
+        Side: o.outlierSide,
+        Limit: o.limit,
+        Q1: b?.q1 ?? null,
+        Q3: b?.q3 ?? null,
+        IQR: b?.iqr ?? null,
+        Lower: b?.lower ?? null,
+        Upper: b?.upper ?? null,
+        DiscrepancyPct: o.discrepancyPct,
+      };
+    }),
+    r1,
+  );
+  wsOsoby['!cols'] = [
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 22 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 12 },
+    { wch: 16 },
+    { wch: 12 },
+    { wch: 18 },
+    { wch: 16 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 8 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+  ];
+  xlsx.utils.book_append_sheet(wb, wsOsoby, 'Osoby');
+
+  // Dni
+  const wsDni = xlsx.utils.aoa_to_sheet([]);
+  r1 = 1;
+  r1 = addKeyValueMeta(wsDni, metaRows, r1);
+  r1 += 1;
+  r1 = addSectionTitle(wsDni, 'Dni (podsumowanie)', r1);
+  r1 = addJsonTable(
+    wsDni,
+    days.map((d) => ({
+      DateStart: d.date,
+      DateEnd: d.end,
+      Total: d.total,
+      OutliersHigh: d.outliersHigh,
+      OutliersLow: d.outliersLow,
+      Singles: d.singles,
+    })),
+    r1,
+  );
+  r1 += 1;
+  r1 = addSectionTitle(wsDni, 'Dni (pozycje)', r1);
+  const dayItems = base
+    .slice()
+    .sort(
+      (a, b) =>
+        String(a.bucketStart ?? '').localeCompare(String(b.bucketStart ?? '')) ||
+        String(a.outlierSide ?? '').localeCompare(String(b.outlierSide ?? '')) ||
+        String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+        String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+    )
+    .map((it) => {
+      const b = bounds.get(it._boundsKey) ?? null;
+      const limit = it.outlierSide ? (b ? (it.outlierSide === 'high' ? b.upper : b.lower) : null) : null;
+      const discrepancyPct =
+        it.outlierSide && it.coef != null && Number.isFinite(it.coef) && limit != null
+          ? computeDiscrepancyPct(it.coef, limit)
+          : null;
+      const key = it.key;
+      return {
+        BucketStart: it.bucketStart,
+        BucketEnd: it.bucketEnd,
+        DataMRN: it.data_mrn,
+        MRN: it.numer_mrn,
+        NrSAD: it.nr_sad,
+        Agent: it.agent_celny,
+        Odbiorca: key?.odbiorca ?? '',
+        KodTowaru: key?.kod_towaru ?? '',
+        Waluta: key?.waluta ?? '',
+        KursWaluty: key?.kurs_waluty ?? '',
+        WarunkiDostawy: key?.warunki_dostawy ?? '',
+        KrajWysylki: key?.kraj_wysylki ?? '',
+        TransportRodzaj: key?.transport_na_granicy_rodzaj ?? '',
+        OplatyCelneRazem: it.fees,
+        MasaNetto: it.mass,
+        Coef: it.coef,
+        ManualVerified: it.verifiedManual,
+        Checkable: it.checkable,
+        OutlierSide: it.outlierSide,
+        Limit: limit,
+        Q1: b?.q1 ?? null,
+        Q3: b?.q3 ?? null,
+        IQR: b?.iqr ?? null,
+        Lower: b?.lower ?? null,
+        Upper: b?.upper ?? null,
+        DiscrepancyPct: discrepancyPct,
+        RowId: it.rowId,
+      };
+    });
+  r1 = addJsonTable(wsDni, dayItems, r1);
+  xlsx.utils.book_append_sheet(wb, wsDni, 'Dni');
+
+  // Grupy
+  const wsGrupy = xlsx.utils.aoa_to_sheet([]);
+  r1 = 1;
+  r1 = addKeyValueMeta(wsGrupy, metaRows, r1);
+  r1 += 1;
+  r1 = addSectionTitle(wsGrupy, 'Grupy (podsumowanie)', r1);
+  r1 = addJsonTable(
+    wsGrupy,
+    groups.map((g) => ({
+      Count: g.count,
+      Odbiorca: g.key.odbiorca,
+      KodTowaru: g.key.kod_towaru,
+      Waluta: g.key.waluta,
+      KursWaluty: g.key.kurs_waluty,
+      WarunkiDostawy: g.key.warunki_dostawy,
+      KrajWysylki: g.key.kraj_wysylki,
+      TransportRodzaj: g.key.transport_na_granicy_rodzaj,
+    })),
+    r1,
+  );
+  r1 += 1;
+  r1 = addSectionTitle(wsGrupy, 'Grupy (pozycje)', r1);
+  const groupItems = base
+    .slice()
+    .sort(
+      (a, b) =>
+        JSON.stringify(a.key).localeCompare(JSON.stringify(b.key)) ||
+        String(a.bucketStart ?? '').localeCompare(String(b.bucketStart ?? '')) ||
+        String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+        String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+    )
+    .map((it) => {
+      const b = bounds.get(it._boundsKey) ?? null;
+      const limit = it.outlierSide ? (b ? (it.outlierSide === 'high' ? b.upper : b.lower) : null) : null;
+      const discrepancyPct =
+        it.outlierSide && it.coef != null && Number.isFinite(it.coef) && limit != null
+          ? computeDiscrepancyPct(it.coef, limit)
+          : null;
+      const key = it.key;
+      return {
+        Odbiorca: key?.odbiorca ?? '',
+        KodTowaru: key?.kod_towaru ?? '',
+        Waluta: key?.waluta ?? '',
+        KursWaluty: key?.kurs_waluty ?? '',
+        WarunkiDostawy: key?.warunki_dostawy ?? '',
+        KrajWysylki: key?.kraj_wysylki ?? '',
+        TransportRodzaj: key?.transport_na_granicy_rodzaj ?? '',
+        BucketStart: it.bucketStart,
+        BucketEnd: it.bucketEnd,
+        DataMRN: it.data_mrn,
+        MRN: it.numer_mrn,
+        NrSAD: it.nr_sad,
+        Agent: it.agent_celny,
+        OplatyCelneRazem: it.fees,
+        MasaNetto: it.mass,
+        Coef: it.coef,
+        ManualVerified: it.verifiedManual,
+        Checkable: it.checkable,
+        OutlierSide: it.outlierSide,
+        Limit: limit,
+        Q1: b?.q1 ?? null,
+        Q3: b?.q3 ?? null,
+        IQR: b?.iqr ?? null,
+        Lower: b?.lower ?? null,
+        Upper: b?.upper ?? null,
+        DiscrepancyPct: discrepancyPct,
+        RowId: it.rowId,
+      };
+    });
+  addJsonTable(wsGrupy, groupItems, r1);
+  xlsx.utils.book_append_sheet(wb, wsGrupy, 'Grupy');
+
+  fs.mkdirSync(path.dirname(params.filePath), { recursive: true });
+  xlsx.writeFile(wb, params.filePath, { bookType: 'xlsx', compression: true });
+  return { ok: true };
+}
