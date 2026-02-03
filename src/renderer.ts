@@ -38,6 +38,7 @@ const els = {
   settingsStatus: document.getElementById("settings-status") as HTMLElement,
 
   meta: document.getElementById("meta") as HTMLElement,
+  appVersion: document.getElementById("app-version") as HTMLElement,
 
   btnPrev: document.getElementById("btn-prev") as HTMLButtonElement,
   btnNext: document.getElementById("btn-next") as HTMLButtonElement,
@@ -418,7 +419,8 @@ async function refreshSettings() {
     els.dbPath.textContent = "—";
     setStatus(els.settingsStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
-    if (!els.settingsStatus.textContent && lastUpdateCheck) {
+    const showUpdateDebug = localStorage.getItem("showUpdateDebug") === "1";
+    if (showUpdateDebug && !els.settingsStatus.textContent && lastUpdateCheck) {
       const u = lastUpdateCheck;
       const manifest = u.manifestUrl ? ` (${u.manifestUrl})` : "";
       const base = `Updates: current=${u.currentVersion} latest=${u.latestVersion ?? "—"} available=${u.updateAvailable}`;
@@ -429,6 +431,17 @@ async function refreshSettings() {
       else setStatus(els.settingsStatus, `${base}${manifest}`);
     }
     setBusy(false);
+  }
+}
+
+async function refreshAppVersion() {
+  if (!els.appVersion) return;
+  try {
+    const res = await window.api.getAppVersion();
+    const v = String(res?.version ?? "").trim();
+    els.appVersion.textContent = v || "—";
+  } catch {
+    els.appVersion.textContent = "—";
   }
 }
 
@@ -1387,3 +1400,4 @@ if (!updateStatusUnsub) {
 
 void refreshMeta();
 void checkForUpdatesAndBlock();
+void refreshAppVersion();

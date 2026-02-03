@@ -191,6 +191,14 @@ body.update-required #app {
   letter-spacing: 0.2px;
 }
 
+.app-version {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.1px;
+}
+
 .app-meta {
   color: var(--muted);
   font-size: 12px;
