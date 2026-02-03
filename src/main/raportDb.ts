@@ -493,6 +493,129 @@ function toYmdRange(period: string): { start: string; end: string } {
   return { start: `${match[1]}-${match[2]}-01`, end: `${match[1]}-${match[2]}-${String(lastDay).padStart(2, '0')}` };
 }
 
+type ValidationDateGrouping = 'day' | 'days2' | 'days3' | 'week' | 'month' | 'months2';
+
+function normalizeValidationDateGrouping(value: unknown): ValidationDateGrouping {
+  const v = String(value ?? '').trim();
+  if (v === 'days2') return 'days2';
+  if (v === 'days3') return 'days3';
+  if (v === 'week') return 'week';
+  if (v === 'month') return 'month';
+  if (v === 'months2') return 'months2';
+  return 'day';
+}
+
+function clampInt(n: number, min: number, max: number): number {
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, Math.trunc(n)));
+}
+
+function parseYmdStrict(ymd: string): { y: number; m: number; d: number } | null {
+  const m = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.exec(String(ymd ?? '').trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mon = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(Date.UTC(y, mon - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mon - 1 || dt.getUTCDate() !== d) return null;
+  return { y, m: mon, d };
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function ymdToUtcMs(ymd: string): number | null {
+  const p = parseYmdStrict(ymd);
+  if (!p) return null;
+  return Date.UTC(p.y, p.m - 1, p.d);
+}
+
+function utcMsToYmd(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function addDaysYmd(ymd: string, days: number): string | null {
+  const ms = ymdToUtcMs(ymd);
+  if (ms == null) return null;
+  const d = Number(days);
+  if (!Number.isFinite(d)) return null;
+  return utcMsToYmd(ms + Math.trunc(d) * MS_PER_DAY);
+}
+
+function addMonthsYmdClamped(ymd: string, months: number): string | null {
+  const p = parseYmdStrict(ymd);
+  if (!p) return null;
+  const m = Number(months);
+  if (!Number.isFinite(m)) return null;
+  const targetFirst = new Date(Date.UTC(p.y, p.m - 1 + Math.trunc(m), 1));
+  const lastDay = new Date(Date.UTC(targetFirst.getUTCFullYear(), targetFirst.getUTCMonth() + 1, 0)).getUTCDate();
+  const dd = Math.min(p.d, lastDay);
+  return utcMsToYmd(Date.UTC(targetFirst.getUTCFullYear(), targetFirst.getUTCMonth(), dd));
+}
+
+function getValidationGroupingConfig(params: { grouping?: unknown; offsetDays?: unknown }): { grouping: ValidationDateGrouping; offsetDays: number } {
+  const grouping = normalizeValidationDateGrouping(params.grouping);
+  const raw = typeof params.offsetDays === 'number' ? params.offsetDays : Number.parseInt(String(params.offsetDays ?? '0'), 10);
+  const offsetDays = clampInt(Number.isFinite(raw) ? raw : 0, -62, 62);
+  return { grouping, offsetDays };
+}
+
+function bucketEndFromStart(startYmd: string, grouping: ValidationDateGrouping): string | null {
+  if (!startYmd) return null;
+  if (grouping === 'day') return startYmd;
+  if (grouping === 'days2') return addDaysYmd(startYmd, 1);
+  if (grouping === 'days3') return addDaysYmd(startYmd, 2);
+  if (grouping === 'week') return addDaysYmd(startYmd, 6);
+  if (grouping === 'month') {
+    const next = addMonthsYmdClamped(startYmd, 1);
+    return next ? addDaysYmd(next, -1) : null;
+  }
+  if (grouping === 'months2') {
+    const next = addMonthsYmdClamped(startYmd, 2);
+    return next ? addDaysYmd(next, -1) : null;
+  }
+  return startYmd;
+}
+
+function bucketStartForDate(dateYmd: string, anchorYmd: string, grouping: ValidationDateGrouping): string | null {
+  const dateMs = ymdToUtcMs(dateYmd);
+  if (dateMs == null) return null;
+
+  if (grouping === 'day') return dateYmd;
+
+  if (grouping === 'days2' || grouping === 'days3' || grouping === 'week') {
+    const anchorMs = ymdToUtcMs(anchorYmd);
+    if (anchorMs == null) return dateYmd;
+    const sizeDays = grouping === 'days2' ? 2 : grouping === 'days3' ? 3 : 7;
+    const diffDays = Math.floor((dateMs - anchorMs) / MS_PER_DAY);
+    const bucketIdx = Math.floor(diffDays / sizeDays);
+    return utcMsToYmd(anchorMs + bucketIdx * sizeDays * MS_PER_DAY);
+  }
+
+  const stepMonths = grouping === 'month' ? 1 : 2;
+  const anchorParsed = parseYmdStrict(anchorYmd);
+  if (!anchorParsed) return dateYmd;
+  let start = anchorYmd;
+
+  const cmp = dateYmd.localeCompare(anchorYmd);
+  if (cmp >= 0) {
+    for (let i = 0; i < 60; i++) {
+      const next = addMonthsYmdClamped(start, stepMonths);
+      if (!next) break;
+      if (next.localeCompare(dateYmd) > 0) break;
+      start = next;
+    }
+    return start;
+  }
+
+  for (let i = 0; i < 60; i++) {
+    const prev = addMonthsYmdClamped(start, -stepMonths);
+    if (!prev) break;
+    if (prev.localeCompare(dateYmd) <= 0) return prev;
+    start = prev;
+  }
+  return start;
+}
+
 function parseLocaleNumber(value: string | null | undefined): number | null {
   if (value == null) return null;
   let s = String(value).trim();
@@ -673,6 +796,8 @@ export async function getValidationItems(params: {
   month: string;
   key: ValidationGroupKey;
   mrn?: string | null;
+  grouping?: unknown;
+  offsetDays?: unknown;
 }): Promise<{
   range: { start: string; end: string };
   key: ValidationGroupKey;
@@ -690,6 +815,8 @@ export async function getValidationItems(params: {
 }> {
   const client = await getPrisma();
   const range = toYmdRange(params.month);
+  const { grouping, offsetDays } = getValidationGroupingConfig(params);
+  const anchor = addDaysYmd(range.start, offsetDays) ?? range.start;
   const rows = await queryValidationRepresentativeRows(client, range);
   const manual = await getValidationManualSet(client);
 
@@ -722,9 +849,11 @@ export async function getValidationItems(params: {
       const rowIdRaw = Number(r.id);
       const rowId = Number.isFinite(rowIdRaw) ? rowIdRaw : 0;
       const verifiedManual = rowId > 0 ? manual.has(rowId) : false;
+      const data_mrn = r.data_mrn ?? null;
       return {
         rowId,
-        data_mrn: r.data_mrn ?? null,
+        data_mrn,
+        bucketStart: data_mrn ? bucketStartForDate(data_mrn, anchor, grouping) : null,
         odbiorca: r.odbiorca ?? null,
         numer_mrn: r.numer_mrn ?? null,
         coef,
@@ -739,12 +868,12 @@ export async function getValidationItems(params: {
   const byDate = new Map<string, number[]>();
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
-    if (!it.data_mrn) continue;
+    if (!it.bucketStart) continue;
     if (it.verifiedManual) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
-    const arr = byDate.get(it.data_mrn);
+    const arr = byDate.get(it.bucketStart);
     if (arr) arr.push(i);
-    else byDate.set(it.data_mrn, [i]);
+    else byDate.set(it.bucketStart, [i]);
   }
 
   for (const indices of byDate.values()) {
@@ -783,7 +912,7 @@ export async function getValidationItems(params: {
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     if (it.verifiedManual) continue;
-    if (!it.data_mrn) continue;
+    if (!it.bucketStart) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
     if (!it.checkable) {
       it.outlier = false;
@@ -847,6 +976,7 @@ function toValidationKey(r: {
 type ValidationComputedItem = {
   rowId: number;
   data_mrn: string | null;
+  bucketStart: string | null;
   numer_mrn: string | null;
   odbiorca: string | null;
   key: ValidationGroupKey;
@@ -861,10 +991,10 @@ function computeIqrFlags(items: ValidationComputedItem[]): void {
   const groupDay = new Map<string, number[]>();
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
-    if (!it.data_mrn) continue;
+    if (!it.bucketStart) continue;
     if (it.verifiedManual) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
-    const k = `${JSON.stringify(it.key)}|${it.data_mrn}`;
+    const k = `${JSON.stringify(it.key)}|${it.bucketStart}`;
     const arr = groupDay.get(k);
     if (arr) arr.push(i);
     else groupDay.set(k, [i]);
@@ -910,7 +1040,7 @@ function computeIqrFlags(items: ValidationComputedItem[]): void {
       it.outlierSide = null;
       continue;
     }
-    if (!it.data_mrn) continue;
+    if (!it.bucketStart) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
     if (!it.checkable) {
       it.outlier = false;
@@ -919,13 +1049,15 @@ function computeIqrFlags(items: ValidationComputedItem[]): void {
   }
 }
 
-export async function getValidationDashboard(params: { month: string; mrn?: string | null }): Promise<{
+export async function getValidationDashboard(params: { month: string; mrn?: string | null; grouping?: unknown; offsetDays?: unknown }): Promise<{
   range: { start: string; end: string };
   stats: { outliersHigh: number; outliersLow: number; singles: number; verifiedManual: number };
-  days: Array<{ date: string; outliersHigh: number; outliersLow: number; singles: number; total: number }>;
+  days: Array<{ date: string; end: string; outliersHigh: number; outliersLow: number; singles: number; total: number }>;
 }> {
   const client = await getPrisma();
   const range = toYmdRange(params.month);
+  const { grouping, offsetDays } = getValidationGroupingConfig(params);
+  const anchor = addDaysYmd(range.start, offsetDays) ?? range.start;
   const rows = await queryValidationRepresentativeRows(client, range);
   const manual = await getValidationManualSet(client);
 
@@ -936,9 +1068,11 @@ export async function getValidationDashboard(params: { month: string; mrn?: stri
     const rowIdRaw = Number(r.id);
     const rowId = Number.isFinite(rowIdRaw) ? rowIdRaw : 0;
     const verifiedManual = rowId > 0 ? manual.has(rowId) : false;
+    const data_mrn = r.data_mrn ?? null;
     return {
       rowId,
-      data_mrn: r.data_mrn ?? null,
+      data_mrn,
+      bucketStart: data_mrn ? bucketStartForDate(data_mrn, anchor, grouping) : null,
       numer_mrn: r.numer_mrn ?? null,
       odbiorca: r.odbiorca ?? null,
       key: toValidationKey(r),
@@ -955,15 +1089,16 @@ export async function getValidationDashboard(params: { month: string; mrn?: stri
   const mrn = normalizeMrnQuery(params.mrn);
   const base = mrn ? items.filter((it) => mrnContains(it.numer_mrn, mrn)) : items;
 
-  const dayMap = new Map<string, { date: string; outliersHigh: number; outliersLow: number; singles: number; total: number }>();
+  const dayMap = new Map<string, { date: string; end: string; outliersHigh: number; outliersLow: number; singles: number; total: number }>();
   let verifiedManual = 0;
   for (const it of base) {
     if (it.verifiedManual) verifiedManual += 1;
-    if (!it.data_mrn) continue;
+    if (!it.bucketStart) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
-    const date = it.data_mrn;
+    const date = it.bucketStart;
+    const end = bucketEndFromStart(date, grouping) ?? date;
     const agg =
-      dayMap.get(date) ?? { date, outliersHigh: 0, outliersLow: 0, singles: 0, total: 0 };
+      dayMap.get(date) ?? { date, end, outliersHigh: 0, outliersLow: 0, singles: 0, total: 0 };
     if (!it.verifiedManual) agg.total += 1;
     if (it.outlierSide === 'high') agg.outliersHigh += 1;
     if (it.outlierSide === 'low') agg.outliersLow += 1;
@@ -987,6 +1122,8 @@ export async function getValidationDayItems(params: {
   date: string;
   filter: ValidationDayFilter;
   mrn?: string | null;
+  grouping?: unknown;
+  offsetDays?: unknown;
 }): Promise<{
   date: string;
   totals: { all: number; outliersHigh: number; outliersLow: number; singles: number; verifiedManual: number };
@@ -1006,8 +1143,17 @@ export async function getValidationDayItems(params: {
   const client = await getPrisma();
   const manual = await getValidationManualSet(client);
 
-  const date = String(params.date ?? '').trim();
-  const rows = await queryValidationRepresentativeRows(client, { start: date, end: date });
+  const periodRange = toYmdRange(params.month);
+  const { grouping, offsetDays } = getValidationGroupingConfig(params);
+  const anchor = addDaysYmd(periodRange.start, offsetDays) ?? periodRange.start;
+
+  const rawDate = String(params.date ?? '').trim();
+  const bucketStart = bucketStartForDate(rawDate, anchor, grouping) ?? rawDate;
+  const bucketEnd = bucketEndFromStart(bucketStart, grouping) ?? bucketStart;
+
+  const queryStart = bucketStart.localeCompare(periodRange.start) < 0 ? periodRange.start : bucketStart;
+  const queryEnd = bucketEnd.localeCompare(periodRange.end) > 0 ? periodRange.end : bucketEnd;
+  const rows = queryStart.localeCompare(queryEnd) <= 0 ? await queryValidationRepresentativeRows(client, { start: queryStart, end: queryEnd }) : [];
   const items: ValidationComputedItem[] = rows.map((r) => {
     const fees = parseLocaleNumber(r.oplaty_celne_razem);
     const mass = parseLocaleNumber(r.masa_netto);
@@ -1015,9 +1161,11 @@ export async function getValidationDayItems(params: {
     const rowIdRaw = Number(r.id);
     const rowId = Number.isFinite(rowIdRaw) ? rowIdRaw : 0;
     const verifiedManual = rowId > 0 ? manual.has(rowId) : false;
+    const data_mrn = r.data_mrn ?? null;
     return {
       rowId,
-      data_mrn: r.data_mrn ?? null,
+      data_mrn,
+      bucketStart: data_mrn ? bucketStartForDate(data_mrn, anchor, grouping) : null,
       numer_mrn: r.numer_mrn ?? null,
       odbiorca: r.odbiorca ?? null,
       key: toValidationKey(r),
@@ -1032,7 +1180,8 @@ export async function getValidationDayItems(params: {
   computeIqrFlags(items);
 
   const mrn = normalizeMrnQuery(params.mrn);
-  const base = mrn ? items.filter((it) => mrnContains(it.numer_mrn, mrn)) : items;
+  const inBucket = items.filter((it) => it.bucketStart === bucketStart);
+  const base = mrn ? inBucket.filter((it) => mrnContains(it.numer_mrn, mrn)) : inBucket;
 
   const filter: ValidationDayFilter =
     params.filter === 'outliersHigh' || params.filter === 'outliersLow' || params.filter === 'singles' ? params.filter : 'all';
@@ -1057,7 +1206,7 @@ export async function getValidationDayItems(params: {
   );
 
   return {
-    date,
+    date: bucketStart,
     totals,
     items: filtered.map((it) => ({
       rowId: it.rowId,
@@ -1095,12 +1244,14 @@ function computeDiscrepancyPct(value: number, limit: number): number | null {
   return Number.isFinite(pct) ? pct : null;
 }
 
-export async function getValidationOutlierErrors(params: { month: string; mrn?: string | null }): Promise<{
+export async function getValidationOutlierErrors(params: { month: string; mrn?: string | null; grouping?: unknown; offsetDays?: unknown }): Promise<{
   range: { start: string; end: string };
   items: ValidationOutlierError[];
 }> {
   const client = await getPrisma();
   const range = toYmdRange(params.month);
+  const { grouping, offsetDays } = getValidationGroupingConfig(params);
+  const anchor = addDaysYmd(range.start, offsetDays) ?? range.start;
   const rows = await queryValidationRepresentativeRows(client, range);
   const manual = await getValidationManualSet(client);
 
@@ -1116,9 +1267,11 @@ export async function getValidationOutlierErrors(params: { month: string; mrn?: 
     const rowIdRaw = Number(r.id);
     const rowId = Number.isFinite(rowIdRaw) ? rowIdRaw : 0;
     const verifiedManual = rowId > 0 ? manual.has(rowId) : false;
+    const data_mrn = r.data_mrn ?? null;
     return {
       rowId,
-      data_mrn: r.data_mrn ?? null,
+      data_mrn,
+      bucketStart: data_mrn ? bucketStartForDate(data_mrn, anchor, grouping) : null,
       numer_mrn: r.numer_mrn ?? null,
       nr_sad: r.nr_sad ?? null,
       agent_celny: r.zglaszajacy ?? null,
@@ -1136,10 +1289,10 @@ export async function getValidationOutlierErrors(params: { month: string; mrn?: 
   const groupDay = new Map<string, number[]>();
   for (let i = 0; i < computed.length; i++) {
     const it = computed[i];
-    if (!it.data_mrn) continue;
+    if (!it.bucketStart) continue;
     if (it.verifiedManual) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
-    const k = `${JSON.stringify(it.key)}|${it.data_mrn}`;
+    const k = `${JSON.stringify(it.key)}|${it.bucketStart}`;
     const arr = groupDay.get(k);
     if (arr) arr.push(i);
     else groupDay.set(k, [i]);
@@ -1183,7 +1336,7 @@ export async function getValidationOutlierErrors(params: { month: string; mrn?: 
   for (let i = 0; i < computed.length; i++) {
     const it = computed[i];
     if (it.verifiedManual) continue;
-    if (!it.data_mrn) continue;
+    if (!it.bucketStart) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
     if (!it.checkable) {
       it.outlier = false;
@@ -1194,10 +1347,11 @@ export async function getValidationOutlierErrors(params: { month: string; mrn?: 
   const outliers: ValidationOutlierError[] = [];
   for (const it of computed) {
     if (!it.data_mrn) continue;
+    if (!it.bucketStart) continue;
     if (!it.outlierSide) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
 
-    const k = `${JSON.stringify(it.key)}|${it.data_mrn}`;
+    const k = `${JSON.stringify(it.key)}|${it.bucketStart}`;
     const b = bounds.get(k);
     if (!b) continue;
     const limit = it.outlierSide === 'high' ? b.upper : b.lower;

@@ -70,6 +70,18 @@ const els = {
   validationYear: document.getElementById(
     "validation-year",
   ) as HTMLInputElement,
+  validationGrouping: document.getElementById(
+    "validation-grouping",
+  ) as HTMLSelectElement,
+  btnValidationOffsetLeft: document.getElementById(
+    "btn-validation-offset-left",
+  ) as HTMLButtonElement,
+  btnValidationOffsetReset: document.getElementById(
+    "btn-validation-offset-reset",
+  ) as HTMLButtonElement,
+  btnValidationOffsetRight: document.getElementById(
+    "btn-validation-offset-right",
+  ) as HTMLButtonElement,
   validationMrnFilter: document.getElementById(
     "validation-mrn-filter",
   ) as HTMLInputElement,
@@ -705,6 +717,74 @@ function updateValidationPeriodUi(): void {
   els.validationYear.classList.toggle("hidden", mode !== "year");
 }
 
+type ValidationDateGrouping =
+  | "day"
+  | "days2"
+  | "days3"
+  | "week"
+  | "month"
+  | "months2";
+
+const VALIDATION_GROUPING_STORAGE_KEY = "validationGrouping";
+const VALIDATION_GROUPING_OFFSET_STORAGE_KEY = "validationGroupingOffsetDays";
+
+let validationGroupingOffsetDays = 0;
+
+function normalizeValidationDateGrouping(value: unknown): ValidationDateGrouping {
+  const v = String(value ?? "").trim();
+  if (v === "days2") return "days2";
+  if (v === "days3") return "days3";
+  if (v === "week") return "week";
+  if (v === "month") return "month";
+  if (v === "months2") return "months2";
+  return "day";
+}
+
+function clampInt(n: number, min: number, max: number): number {
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, Math.trunc(n)));
+}
+
+function formatOffsetDays(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return "0d";
+  return n > 0 ? `+${n}d` : `${n}d`;
+}
+
+function getValidationGroupingOptions(): { grouping: ValidationDateGrouping; offsetDays: number } {
+  const grouping = normalizeValidationDateGrouping(els.validationGrouping?.value);
+  return { grouping, offsetDays: validationGroupingOffsetDays };
+}
+
+function setValidationGroupingValue(value: ValidationDateGrouping): void {
+  els.validationGrouping.value = value;
+  try {
+    localStorage.setItem(VALIDATION_GROUPING_STORAGE_KEY, value);
+  } catch {
+    // ignore
+  }
+}
+
+function setValidationGroupingOffsetDays(value: number): void {
+  validationGroupingOffsetDays = clampInt(value, -62, 62);
+  els.btnValidationOffsetReset.textContent = formatOffsetDays(
+    validationGroupingOffsetDays,
+  );
+  try {
+    localStorage.setItem(
+      VALIDATION_GROUPING_OFFSET_STORAGE_KEY,
+      String(validationGroupingOffsetDays),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function formatBucketLabel(start: string, end: string): string {
+  if (!start) return "-";
+  if (!end || end === start) return start;
+  return `${start}–${end}`;
+}
+
 const VALIDATION_MRN_FILTER_STORAGE_KEY = "validationMrnFilter";
 
 function getValidationMrnFilterValue(): string {
@@ -822,7 +902,11 @@ async function refreshValidationDashboardCounts() {
   const DOWN = "\u2193";
   try {
     const mrn = getValidationMrnFilterValue();
-    const dash = await window.api.getValidationDashboard(period, mrn || undefined);
+    const dash = await window.api.getValidationDashboard(
+      period,
+      mrn || undefined,
+      getValidationGroupingOptions(),
+    );
 
     const statHigh = els.validationGroups.querySelector(
       "#validation-stat-high",
@@ -899,7 +983,12 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
 
   try {
     const mrn = getValidationMrnFilterValue();
-    const res = await window.api.getValidationItems(period, key, mrn || undefined);
+    const res = await window.api.getValidationItems(
+      period,
+      key,
+      mrn || undefined,
+      getValidationGroupingOptions(),
+    );
     const items = res.items ?? [];
 
     const keyGrid = `
@@ -1012,6 +1101,7 @@ async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
       date,
       filter,
       mrn || undefined,
+      getValidationGroupingOptions(),
     );
 
     const btn = (f: ValidationDayFilter, label: string) =>
@@ -1157,9 +1247,20 @@ async function refreshValidation() {
 
   try {
     const [dash, res, outliers] = await Promise.all([
-      window.api.getValidationDashboard(period, getValidationMrnFilterValue() || undefined),
-      window.api.getValidationGroups(period, getValidationMrnFilterValue() || undefined),
-      window.api.getValidationOutlierErrors(period, getValidationMrnFilterValue() || undefined),
+      window.api.getValidationDashboard(
+        period,
+        getValidationMrnFilterValue() || undefined,
+        getValidationGroupingOptions(),
+      ),
+      window.api.getValidationGroups(
+        period,
+        getValidationMrnFilterValue() || undefined,
+      ),
+      window.api.getValidationOutlierErrors(
+        period,
+        getValidationMrnFilterValue() || undefined,
+        getValidationGroupingOptions(),
+      ),
     ]);
 
     const wynikHtml = renderValidationErrorsByAgent(outliers.items ?? []);
@@ -1197,7 +1298,7 @@ async function refreshValidation() {
                   <details class="accordion validation-day" data-date="${escapeHtml(d.date)}">
                     <summary>
                       <span class="day-count" data-date="${escapeHtml(d.date)}">${d.total}</span>
-                      <span class="mrn-code">${escapeHtml(d.date)}</span>
+                      <span class="mrn-code">${escapeHtml(formatBucketLabel(d.date, d.end))}</span>
                       <span class="badge rounded-pill badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="low" data-zero="${d.outliersLow ? "0" : "1"}">↓ ${d.outliersLow}</span>
                       <span class="badge rounded-pill badge-orange day-badge" data-date="${escapeHtml(d.date)}" data-field="high" data-zero="${d.outliersHigh ? "0" : "1"}">↑ ${d.outliersHigh}</span>
                       <span class="badge rounded-pill badge-slate day-badge" data-date="${escapeHtml(d.date)}" data-field="singles" data-zero="${d.singles ? "0" : "1"}">1x ${d.singles}</span>
@@ -1424,6 +1525,37 @@ els.validationPeriod.addEventListener("change", () => {
 els.validationMonth.addEventListener("change", () => void refreshValidation());
 els.validationYear.addEventListener("change", () => void refreshValidation());
 updateValidationPeriodUi();
+
+try {
+  const savedGrouping = localStorage.getItem(VALIDATION_GROUPING_STORAGE_KEY);
+  if (savedGrouping) {
+    els.validationGrouping.value = normalizeValidationDateGrouping(savedGrouping);
+  }
+  const savedOffset = localStorage.getItem(VALIDATION_GROUPING_OFFSET_STORAGE_KEY);
+  const parsedOffset = Number.parseInt(String(savedOffset ?? "0"), 10);
+  setValidationGroupingOffsetDays(Number.isFinite(parsedOffset) ? parsedOffset : 0);
+} catch {
+  setValidationGroupingOffsetDays(0);
+}
+
+els.validationGrouping.addEventListener("change", () => {
+  const v = normalizeValidationDateGrouping(els.validationGrouping.value);
+  setValidationGroupingValue(v);
+  void refreshValidation();
+});
+els.btnValidationOffsetLeft.addEventListener("click", () => {
+  setValidationGroupingOffsetDays(validationGroupingOffsetDays - 1);
+  void refreshValidation();
+});
+els.btnValidationOffsetRight.addEventListener("click", () => {
+  setValidationGroupingOffsetDays(validationGroupingOffsetDays + 1);
+  void refreshValidation();
+});
+els.btnValidationOffsetReset.addEventListener("click", () => {
+  setValidationGroupingOffsetDays(0);
+  void refreshValidation();
+});
+
 try {
   const saved = localStorage.getItem(VALIDATION_MRN_FILTER_STORAGE_KEY) ?? "";
   if (!els.validationMrnFilter.value) els.validationMrnFilter.value = saved;

@@ -13,6 +13,7 @@ import type {
   ValidationDashboard,
   ValidationDayFilter,
   ValidationDayItems,
+  ValidationGroupingOptions,
   ValidationGroupKey,
   ValidationGroups,
   ValidationItems,
@@ -37,10 +38,10 @@ declare global {
 
       getValidationDefaultMonth: () => Promise<{ month: string | null }>;
       getValidationGroups: (month: string, mrn?: string) => Promise<ValidationGroups>;
-      getValidationItems: (month: string, key: ValidationGroupKey, mrn?: string) => Promise<ValidationItems>;
-      getValidationDashboard: (month: string, mrn?: string) => Promise<ValidationDashboard>;
-      getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter, mrn?: string) => Promise<ValidationDayItems>;
-      getValidationOutlierErrors: (month: string, mrn?: string) => Promise<ValidationOutlierErrors>;
+      getValidationItems: (month: string, key: ValidationGroupKey, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationItems>;
+      getValidationDashboard: (month: string, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationDashboard>;
+      getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationDayItems>;
+      getValidationOutlierErrors: (month: string, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationOutlierErrors>;
       setValidationManualVerified: (rowId: number, verified: boolean) => Promise<{ ok: true }>;
 
       getAppVersion: () => Promise<{ version: string }>;
