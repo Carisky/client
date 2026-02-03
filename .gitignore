@@ -99,3 +99,4 @@ releases/**
 # Local DB
 db/*.sqlite
 db/*.db
+db/*.sql
