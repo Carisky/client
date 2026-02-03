@@ -166,14 +166,16 @@ contextBridge.exposeInMainWorld('api', {
   getMrnBatchRows: (numerMrn: string): Promise<MrnBatchRows> => ipcRenderer.invoke('mrnBatch:rows', { numerMrn }),
 
   getValidationDefaultMonth: (): Promise<{ month: string | null }> => ipcRenderer.invoke('validation:defaultMonth'),
-  getValidationGroups: (month: string): Promise<ValidationGroups> => ipcRenderer.invoke('validation:groups', { month }),
-  getValidationItems: (month: string, key: ValidationGroupKey): Promise<ValidationItems> =>
-    ipcRenderer.invoke('validation:items', { month, key }),
-  getValidationDashboard: (month: string): Promise<ValidationDashboard> => ipcRenderer.invoke('validation:dashboard', { month }),
-  getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter): Promise<ValidationDayItems> =>
-    ipcRenderer.invoke('validation:dayItems', { month, date, filter }),
-  getValidationOutlierErrors: (month: string): Promise<ValidationOutlierErrors> =>
-    ipcRenderer.invoke('validation:outlierErrors', { month }),
+  getValidationGroups: (month: string, mrn?: string): Promise<ValidationGroups> =>
+    ipcRenderer.invoke('validation:groups', { month, mrn }),
+  getValidationItems: (month: string, key: ValidationGroupKey, mrn?: string): Promise<ValidationItems> =>
+    ipcRenderer.invoke('validation:items', { month, key, mrn }),
+  getValidationDashboard: (month: string, mrn?: string): Promise<ValidationDashboard> =>
+    ipcRenderer.invoke('validation:dashboard', { month, mrn }),
+  getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter, mrn?: string): Promise<ValidationDayItems> =>
+    ipcRenderer.invoke('validation:dayItems', { month, date, filter, mrn }),
+  getValidationOutlierErrors: (month: string, mrn?: string): Promise<ValidationOutlierErrors> =>
+    ipcRenderer.invoke('validation:outlierErrors', { month, mrn }),
   setValidationManualVerified: (rowId: number, verified: boolean): Promise<{ ok: true }> =>
     ipcRenderer.invoke('validation:setManualVerified', { rowId, verified }),
 

@@ -70,6 +70,12 @@ const els = {
   validationYear: document.getElementById(
     "validation-year",
   ) as HTMLInputElement,
+  validationMrnFilter: document.getElementById(
+    "validation-mrn-filter",
+  ) as HTMLInputElement,
+  btnValidationMrnClear: document.getElementById(
+    "btn-validation-mrn-clear",
+  ) as HTMLButtonElement,
   btnValidationRefresh: document.getElementById(
     "btn-validation-refresh",
   ) as HTMLButtonElement,
@@ -699,6 +705,27 @@ function updateValidationPeriodUi(): void {
   els.validationYear.classList.toggle("hidden", mode !== "year");
 }
 
+const VALIDATION_MRN_FILTER_STORAGE_KEY = "validationMrnFilter";
+
+function getValidationMrnFilterValue(): string {
+  return String(els.validationMrnFilter?.value ?? "").trim();
+}
+
+function setValidationMrnFilterValue(value: string): void {
+  els.validationMrnFilter.value = value;
+  try {
+    localStorage.setItem(VALIDATION_MRN_FILTER_STORAGE_KEY, value);
+  } catch {
+    // ignore
+  }
+  updateValidationMrnFilterUi();
+}
+
+function updateValidationMrnFilterUi(): void {
+  const v = getValidationMrnFilterValue();
+  els.btnValidationMrnClear.classList.toggle("d-none", v.length === 0);
+}
+
 function formatPct(pct: number | null): string {
   if (pct == null || !Number.isFinite(pct)) return "-";
   if (pct < 0.05) return "<0.1%";
@@ -794,7 +821,8 @@ async function refreshValidationDashboardCounts() {
   const UP = "\u2191";
   const DOWN = "\u2193";
   try {
-    const dash = await window.api.getValidationDashboard(period);
+    const mrn = getValidationMrnFilterValue();
+    const dash = await window.api.getValidationDashboard(period, mrn || undefined);
 
     const statHigh = els.validationGroups.querySelector(
       "#validation-stat-high",
@@ -870,7 +898,8 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
   body.innerHTML = `<div class="muted">Ładowanie...</div>`;
 
   try {
-    const res = await window.api.getValidationItems(period, key);
+    const mrn = getValidationMrnFilterValue();
+    const res = await window.api.getValidationItems(period, key, mrn || undefined);
     const items = res.items ?? [];
 
     const keyGrid = `
@@ -977,7 +1006,13 @@ async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
   body.innerHTML = `<div class="muted">Ładowanie...</div>`;
 
   try {
-    const res = await window.api.getValidationDayItems(period, date, filter);
+    const mrn = getValidationMrnFilterValue();
+    const res = await window.api.getValidationDayItems(
+      period,
+      date,
+      filter,
+      mrn || undefined,
+    );
 
     const btn = (f: ValidationDayFilter, label: string) =>
       `<button class="btn btn-outline-light btn-sm btn-filter${filter === f ? " active" : ""}" data-filter="${escapeHtml(f)}">${escapeHtml(label)}</button>`;
@@ -1122,11 +1157,10 @@ async function refreshValidation() {
 
   try {
     const [dash, res, outliers] = await Promise.all([
-      window.api.getValidationDashboard(period),
-      window.api.getValidationGroups(period),
-      window.api.getValidationOutlierErrors(period),
+      window.api.getValidationDashboard(period, getValidationMrnFilterValue() || undefined),
+      window.api.getValidationGroups(period, getValidationMrnFilterValue() || undefined),
+      window.api.getValidationOutlierErrors(period, getValidationMrnFilterValue() || undefined),
     ]);
-    els.validationMeta.textContent = `Okres: ${period} | Zakres: ${res.range.start} → ${res.range.end} | Grupy: ${res.groups.length} | Odchylenia: ↑${dash.stats.outliersHigh} ↓${dash.stats.outliersLow} | Single: ${dash.stats.singles} | Ręcznie: ${dash.stats.verifiedManual}`;
 
     const wynikHtml = renderValidationErrorsByAgent(outliers.items ?? []);
 
@@ -1390,6 +1424,33 @@ els.validationPeriod.addEventListener("change", () => {
 els.validationMonth.addEventListener("change", () => void refreshValidation());
 els.validationYear.addEventListener("change", () => void refreshValidation());
 updateValidationPeriodUi();
+try {
+  const saved = localStorage.getItem(VALIDATION_MRN_FILTER_STORAGE_KEY) ?? "";
+  if (!els.validationMrnFilter.value) els.validationMrnFilter.value = saved;
+} catch {
+  // ignore
+}
+updateValidationMrnFilterUi();
+
+let validationMrnDebounce: number | null = null;
+els.validationMrnFilter.addEventListener("input", () => {
+  updateValidationMrnFilterUi();
+  const v = getValidationMrnFilterValue();
+  try {
+    localStorage.setItem(VALIDATION_MRN_FILTER_STORAGE_KEY, v);
+  } catch {
+    // ignore
+  }
+  if (validationMrnDebounce != null) window.clearTimeout(validationMrnDebounce);
+  validationMrnDebounce = window.setTimeout(() => {
+    validationMrnDebounce = null;
+    void refreshValidation();
+  }, 280);
+});
+els.btnValidationMrnClear.addEventListener("click", () => {
+  setValidationMrnFilterValue("");
+  void refreshValidation();
+});
 
 if (!updateStatusUnsub) {
   updateStatusUnsub = window.api.onUpdateStatus((s) => {

@@ -36,11 +36,11 @@ declare global {
       getMrnBatchRows: (numerMrn: string) => Promise<MrnBatchRows>;
 
       getValidationDefaultMonth: () => Promise<{ month: string | null }>;
-      getValidationGroups: (month: string) => Promise<ValidationGroups>;
-      getValidationItems: (month: string, key: ValidationGroupKey) => Promise<ValidationItems>;
-      getValidationDashboard: (month: string) => Promise<ValidationDashboard>;
-      getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter) => Promise<ValidationDayItems>;
-      getValidationOutlierErrors: (month: string) => Promise<ValidationOutlierErrors>;
+      getValidationGroups: (month: string, mrn?: string) => Promise<ValidationGroups>;
+      getValidationItems: (month: string, key: ValidationGroupKey, mrn?: string) => Promise<ValidationItems>;
+      getValidationDashboard: (month: string, mrn?: string) => Promise<ValidationDashboard>;
+      getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter, mrn?: string) => Promise<ValidationDayItems>;
+      getValidationOutlierErrors: (month: string, mrn?: string) => Promise<ValidationOutlierErrors>;
       setValidationManualVerified: (rowId: number, verified: boolean) => Promise<{ ok: true }>;
 
       getAppVersion: () => Promise<{ version: string }>;

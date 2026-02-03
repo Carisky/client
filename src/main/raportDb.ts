@@ -554,6 +554,17 @@ export type ValidationGroupKey = {
   kod_towaru: string;
 };
 
+function normalizeMrnQuery(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().toUpperCase().replace(/[\s-]+/g, '');
+}
+
+function mrnContains(numerMrn: string | null, queryNorm: string): boolean {
+  if (!queryNorm) return true;
+  const v = String(numerMrn ?? '').trim().toUpperCase().replace(/[\s-]+/g, '');
+  return v.includes(queryNorm);
+}
+
 export async function getValidationDefaultMonth(): Promise<{ month: string | null }> {
   const client = await getPrisma();
   const rows = (await client.$queryRawUnsafe(`
@@ -626,14 +637,16 @@ async function queryValidationRepresentativeRows(client: PrismaClient, range: { 
   }>;
 }
 
-export async function getValidationGroups(params: { month: string }): Promise<{
+export async function getValidationGroups(params: { month: string; mrn?: string | null }): Promise<{
   range: { start: string; end: string };
   groups: Array<{ key: ValidationGroupKey; count: number }>;
 }> {
   const client = await getPrisma();
   const range = toYmdRange(params.month);
 
-  const rows = await queryValidationRepresentativeRows(client, range);
+  let rows = await queryValidationRepresentativeRows(client, range);
+  const mrn = normalizeMrnQuery(params.mrn);
+  if (mrn) rows = rows.filter((r) => mrnContains(r.numer_mrn, mrn));
 
   const map = new Map<string, { key: ValidationGroupKey; count: number }>();
   for (const r of rows) {
@@ -656,7 +669,11 @@ export async function getValidationGroups(params: { month: string }): Promise<{
   return { range, groups };
 }
 
-export async function getValidationItems(params: { month: string; key: ValidationGroupKey }): Promise<{
+export async function getValidationItems(params: {
+  month: string;
+  key: ValidationGroupKey;
+  mrn?: string | null;
+}): Promise<{
   range: { start: string; end: string };
   key: ValidationGroupKey;
   items: Array<{
@@ -780,7 +797,9 @@ export async function getValidationItems(params: { month: string; key: Validatio
       String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
   );
 
-  return { range, key: params.key, items };
+  const mrn = normalizeMrnQuery(params.mrn);
+  const filtered = mrn ? items.filter((it) => mrnContains(it.numer_mrn, mrn)) : items;
+  return { range, key: params.key, items: filtered };
 }
 
 export type ValidationDayFilter = 'all' | 'outliersHigh' | 'outliersLow' | 'singles';
@@ -900,7 +919,7 @@ function computeIqrFlags(items: ValidationComputedItem[]): void {
   }
 }
 
-export async function getValidationDashboard(params: { month: string }): Promise<{
+export async function getValidationDashboard(params: { month: string; mrn?: string | null }): Promise<{
   range: { start: string; end: string };
   stats: { outliersHigh: number; outliersLow: number; singles: number; verifiedManual: number };
   days: Array<{ date: string; outliersHigh: number; outliersLow: number; singles: number; total: number }>;
@@ -933,9 +952,12 @@ export async function getValidationDashboard(params: { month: string }): Promise
 
   computeIqrFlags(items);
 
+  const mrn = normalizeMrnQuery(params.mrn);
+  const base = mrn ? items.filter((it) => mrnContains(it.numer_mrn, mrn)) : items;
+
   const dayMap = new Map<string, { date: string; outliersHigh: number; outliersLow: number; singles: number; total: number }>();
   let verifiedManual = 0;
-  for (const it of items) {
+  for (const it of base) {
     if (it.verifiedManual) verifiedManual += 1;
     if (!it.data_mrn) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
@@ -964,6 +986,7 @@ export async function getValidationDayItems(params: {
   month: string;
   date: string;
   filter: ValidationDayFilter;
+  mrn?: string | null;
 }): Promise<{
   date: string;
   totals: { all: number; outliersHigh: number; outliersLow: number; singles: number; verifiedManual: number };
@@ -1008,21 +1031,24 @@ export async function getValidationDayItems(params: {
 
   computeIqrFlags(items);
 
+  const mrn = normalizeMrnQuery(params.mrn);
+  const base = mrn ? items.filter((it) => mrnContains(it.numer_mrn, mrn)) : items;
+
   const filter: ValidationDayFilter =
     params.filter === 'outliersHigh' || params.filter === 'outliersLow' || params.filter === 'singles' ? params.filter : 'all';
   const totals = {
-    all: items.length,
-    outliersHigh: items.filter((it) => it.outlierSide === 'high').length,
-    outliersLow: items.filter((it) => it.outlierSide === 'low').length,
-    singles: items.filter((it) => !it.verifiedManual && it.coef != null && Number.isFinite(it.coef) && !it.checkable).length,
-    verifiedManual: items.filter((it) => it.verifiedManual).length,
+    all: base.length,
+    outliersHigh: base.filter((it) => it.outlierSide === 'high').length,
+    outliersLow: base.filter((it) => it.outlierSide === 'low').length,
+    singles: base.filter((it) => !it.verifiedManual && it.coef != null && Number.isFinite(it.coef) && !it.checkable).length,
+    verifiedManual: base.filter((it) => it.verifiedManual).length,
   };
 
-  let filtered = items;
-  if (filter === 'outliersHigh') filtered = items.filter((it) => it.outlierSide === 'high');
-  else if (filter === 'outliersLow') filtered = items.filter((it) => it.outlierSide === 'low');
+  let filtered = base;
+  if (filter === 'outliersHigh') filtered = base.filter((it) => it.outlierSide === 'high');
+  else if (filter === 'outliersLow') filtered = base.filter((it) => it.outlierSide === 'low');
   else if (filter === 'singles')
-    filtered = items.filter((it) => !it.verifiedManual && it.coef != null && Number.isFinite(it.coef) && !it.checkable);
+    filtered = base.filter((it) => !it.verifiedManual && it.coef != null && Number.isFinite(it.coef) && !it.checkable);
 
   filtered.sort(
     (a, b) =>
@@ -1069,7 +1095,7 @@ function computeDiscrepancyPct(value: number, limit: number): number | null {
   return Number.isFinite(pct) ? pct : null;
 }
 
-export async function getValidationOutlierErrors(params: { month: string }): Promise<{
+export async function getValidationOutlierErrors(params: { month: string; mrn?: string | null }): Promise<{
   range: { start: string; end: string };
   items: ValidationOutlierError[];
 }> {
@@ -1198,5 +1224,7 @@ export async function getValidationOutlierErrors(params: { month: string }): Pro
       String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
   );
 
-  return { range, items: outliers };
+  const mrn = normalizeMrnQuery(params.mrn);
+  const filtered = mrn ? outliers.filter((it) => mrnContains(it.numer_mrn, mrn)) : outliers;
+  return { range, items: filtered };
 }
