@@ -156,8 +156,13 @@
         <section id="tab-validation" class="tab-panel hidden">
           <div class="toolbar">
             <div class="actions">
-              <label class="muted" for="validation-month" style="margin-right: 6px;">Miesiąc</label>
+              <label class="muted" for="validation-period" style="margin-right: 6px;">Okres</label>
+              <select id="validation-period" class="form-select form-select-sm" style="max-width: 130px;">
+                <option value="month" selected>Miesiąc</option>
+                <option value="year">Rok</option>
+              </select>
               <input id="validation-month" class="form-control form-control-sm" type="month" />
+              <input id="validation-year" class="form-control form-control-sm hidden" type="number" inputmode="numeric" min="2000" max="2100" placeholder="YYYY" style="max-width: 110px;" />
               <button id="btn-validation-refresh" class="btn btn-outline-light btn-sm">
                 <svg class="ui-icon spin-on-busy" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />

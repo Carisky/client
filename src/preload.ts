@@ -103,6 +103,25 @@ export type ValidationDayItems = {
   }>;
 };
 
+export type ValidationOutlierError = {
+  rowId: number;
+  data_mrn: string | null;
+  numer_mrn: string | null;
+  nr_sad: string | null;
+  agent_celny: string | null;
+  odbiorca: string | null;
+  key: ValidationGroupKey;
+  coef: number;
+  outlierSide: 'low' | 'high';
+  limit: number;
+  discrepancyPct: number | null;
+};
+
+export type ValidationOutlierErrors = {
+  range: { start: string; end: string };
+  items: ValidationOutlierError[];
+};
+
 export type UpdateCheckResult = {
   supported: boolean;
   updateAvailable: boolean;
@@ -153,6 +172,8 @@ contextBridge.exposeInMainWorld('api', {
   getValidationDashboard: (month: string): Promise<ValidationDashboard> => ipcRenderer.invoke('validation:dashboard', { month }),
   getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter): Promise<ValidationDayItems> =>
     ipcRenderer.invoke('validation:dayItems', { month, date, filter }),
+  getValidationOutlierErrors: (month: string): Promise<ValidationOutlierErrors> =>
+    ipcRenderer.invoke('validation:outlierErrors', { month }),
   setValidationManualVerified: (rowId: number, verified: boolean): Promise<{ ok: true }> =>
     ipcRenderer.invoke('validation:setManualVerified', { rowId, verified }),
 

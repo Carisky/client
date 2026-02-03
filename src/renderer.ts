@@ -63,6 +63,12 @@ const els = {
   validationMonth: document.getElementById(
     "validation-month",
   ) as HTMLInputElement,
+  validationPeriod: document.getElementById(
+    "validation-period",
+  ) as HTMLSelectElement,
+  validationYear: document.getElementById(
+    "validation-year",
+  ) as HTMLInputElement,
   btnValidationRefresh: document.getElementById(
     "btn-validation-refresh",
   ) as HTMLButtonElement,
@@ -622,6 +628,11 @@ type ValidationGroupKey = {
 };
 
 type ValidationDayFilter = "all" | "outliersHigh" | "outliersLow" | "singles";
+type ValidationPeriodMode = "month" | "year";
+
+type ValidationOutlierError = Awaited<
+  ReturnType<typeof window.api.getValidationOutlierErrors>
+>["items"][number];
 
 function encodeKey(key: unknown): string {
   try {
@@ -653,13 +664,124 @@ function renderCoefArrow(side: "low" | "high" | null): string {
   return "";
 }
 
+function getValidationPeriodMode(): ValidationPeriodMode {
+  const v = String(els.validationPeriod?.value ?? "month").trim();
+  return v === "year" ? "year" : "month";
+}
+
+function getValidationPeriodValue(): string {
+  const mode = getValidationPeriodMode();
+  if (mode === "year") {
+    const raw = String(els.validationYear.value ?? "").trim();
+    const y = Number.parseInt(raw, 10);
+    if (!Number.isFinite(y) || y < 1900 || y > 2200) return "";
+    return String(y).padStart(4, "0");
+  }
+  return String(els.validationMonth.value ?? "").trim();
+}
+
+function updateValidationPeriodUi(): void {
+  const mode = getValidationPeriodMode();
+  els.validationMonth.classList.toggle("hidden", mode !== "month");
+  els.validationYear.classList.toggle("hidden", mode !== "year");
+}
+
+function formatPct(pct: number | null): string {
+  if (pct == null || !Number.isFinite(pct)) return "-";
+  if (pct < 0.05) return "<0.1%";
+  return `${pct.toFixed(1)}%`;
+}
+
+function formatNum(n: number | null): string {
+  if (n == null || !Number.isFinite(n)) return "-";
+  return n.toFixed(4);
+}
+
+function renderValidationErrorsByAgent(items: ValidationOutlierError[]): string {
+  if (!items || items.length === 0) {
+    return `<div class="muted" style="padding:6px 2px 10px;">Brak błędów (odchyleń poza limitem).</div>`;
+  }
+
+  const byAgent = new Map<string, ValidationOutlierError[]>();
+  for (const it of items) {
+    const raw = String(it.agent_celny ?? "").trim();
+    const agent = raw.length > 0 ? raw : "—";
+    const arr = byAgent.get(agent);
+    if (arr) arr.push(it);
+    else byAgent.set(agent, [it]);
+  }
+
+  const agents = Array.from(byAgent.entries()).sort(
+    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+  );
+
+  return agents
+    .map(([agent, list]) => {
+      list.sort(
+        (a, b) =>
+          (b.discrepancyPct ?? -1) - (a.discrepancyPct ?? -1) ||
+          String(a.data_mrn ?? "").localeCompare(String(b.data_mrn ?? "")) ||
+          String(a.numer_mrn ?? "").localeCompare(String(b.numer_mrn ?? "")),
+      );
+
+      const rows = list
+        .map((e) => {
+          const groupParts = [
+            e.key?.odbiorca || "-",
+            e.key?.kod_towaru ? `kod:${e.key.kod_towaru}` : "",
+            e.key?.waluta ? `wal:${e.key.waluta}` : "",
+          ].filter(Boolean);
+          const groupTitle = groupParts.join(" | ");
+          const arrow = renderCoefArrow(e.outlierSide);
+          const opisParts = [
+            e.data_mrn ?? "-",
+            e.nr_sad ? `SAD: ${e.nr_sad}` : "",
+            groupTitle,
+            `coef=${formatNum(e.coef)}`,
+            `limit=${formatNum(e.limit)}`,
+          ].filter(Boolean);
+          const opis = opisParts.join(" • ");
+          return `<tr class="outlier">
+            <td class="mono">${escapeHtml(e.numer_mrn ?? "-")}</td>
+            <td title="${escapeHtml(opis)}">${escapeHtml(groupTitle || "-")}</td>
+            <td class="mono" title="${escapeHtml(opis)}">${arrow}<span style="margin-left:6px;">${escapeHtml(formatPct(e.discrepancyPct))}</span></td>
+            <td>${escapeHtml(agent)}</td>
+          </tr>`;
+        })
+        .join("");
+
+      return `
+        <details class="accordion validation-agent">
+          <summary>
+            <span class="mrn-code" title="${escapeHtml(agent)}">${escapeHtml(agent)}</span>
+            <span class="badge rounded-pill badge-count">${list.length}</span>
+          </summary>
+          <div class="accordion-body">
+            <table class="table table-sm table-dark table-hover mini-table" style="margin:0">
+              <thead>
+                <tr>
+                  <th>Lista błędów (MRN)</th>
+                  <th>Opis</th>
+                  <th>Rozbieżność %</th>
+                  <th>Agent celny</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </details>
+      `;
+    })
+    .join("");
+}
+
 async function refreshValidationDashboardCounts() {
-  const month = els.validationMonth.value;
-  if (!month) return;
+  const period = getValidationPeriodValue();
+  if (!period) return;
   const UP = "\u2191";
   const DOWN = "\u2193";
   try {
-    const dash = await window.api.getValidationDashboard(month);
+    const dash = await window.api.getValidationDashboard(period);
 
     const statHigh = els.validationGroups.querySelector(
       "#validation-stat-high",
@@ -720,8 +842,8 @@ async function refreshValidationDashboardCounts() {
 
 async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
   const keyEncoded = detailsEl.dataset.key ?? "";
-  const month = els.validationMonth.value;
-  if (!keyEncoded || !month) return;
+  const period = getValidationPeriodValue();
+  if (!keyEncoded || !period) return;
   if (detailsEl.dataset.loaded === "1") return;
   if (detailsEl.dataset.loading === "1") return;
 
@@ -735,7 +857,7 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
   body.innerHTML = `<div class="muted">Ładowanie...</div>`;
 
   try {
-    const res = await window.api.getValidationItems(month, key);
+    const res = await window.api.getValidationItems(period, key);
     const items = res.items ?? [];
 
     const keyGrid = `
@@ -827,9 +949,9 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
 }
 
 async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
-  const month = els.validationMonth.value;
+  const period = getValidationPeriodValue();
   const date = detailsEl.dataset.date ?? "";
-  if (!date || !month) return;
+  if (!date || !period) return;
   if (detailsEl.dataset.loading === "1") return;
   if (detailsEl.dataset.loaded === "1") return;
 
@@ -842,7 +964,7 @@ async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
   body.innerHTML = `<div class="muted">Ładowanie...</div>`;
 
   try {
-    const res = await window.api.getValidationDayItems(month, date, filter);
+    const res = await window.api.getValidationDayItems(period, date, filter);
 
     const btn = (f: ValidationDayFilter, label: string) =>
       `<button class="btn btn-outline-light btn-sm btn-filter${filter === f ? " active" : ""}" data-filter="${escapeHtml(f)}">${escapeHtml(label)}</button>`;
@@ -948,11 +1070,12 @@ async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
   }
 }
 
-async function ensureValidationMonthDefault() {
-  if (els.validationMonth.value) return;
+async function ensureValidationDefaults() {
+  if (els.validationMonth.value && els.validationYear.value) return;
   try {
     const res = await window.api.getValidationDefaultMonth();
-    if (res.month) els.validationMonth.value = res.month;
+    if (res.month && !els.validationMonth.value) els.validationMonth.value = res.month;
+    if (res.month && !els.validationYear.value) els.validationYear.value = String(res.month).slice(0, 4);
   } catch {
     // ignore
   }
@@ -960,10 +1083,11 @@ async function ensureValidationMonthDefault() {
 
 async function refreshValidation() {
   setStatus(els.validationStatus, "");
-  await ensureValidationMonthDefault();
-  const month = els.validationMonth.value;
-  if (!month) {
-    setStatus(els.validationStatus, "Wybierz miesiąc.");
+  updateValidationPeriodUi();
+  await ensureValidationDefaults();
+  const period = getValidationPeriodValue();
+  if (!period) {
+    setStatus(els.validationStatus, "Wybierz miesiąc lub rok.");
     return;
   }
 
@@ -984,11 +1108,14 @@ async function refreshValidation() {
   setBusy(true);
 
   try {
-    const [dash, res] = await Promise.all([
-      window.api.getValidationDashboard(month),
-      window.api.getValidationGroups(month),
+    const [dash, res, outliers] = await Promise.all([
+      window.api.getValidationDashboard(period),
+      window.api.getValidationGroups(period),
+      window.api.getValidationOutlierErrors(period),
     ]);
-    els.validationMeta.textContent = `Zakres: ${res.range.start} → ${res.range.end} | Grupy: ${res.groups.length} | Odchylenia: ↑${dash.stats.outliersHigh} ↓${dash.stats.outliersLow} | Single: ${dash.stats.singles} | Ręcznie: ${dash.stats.verifiedManual}`;
+    els.validationMeta.textContent = `Okres: ${period} | Zakres: ${res.range.start} → ${res.range.end} | Grupy: ${res.groups.length} | Odchylenia: ↑${dash.stats.outliersHigh} ↓${dash.stats.outliersLow} | Single: ${dash.stats.singles} | Ręcznie: ${dash.stats.verifiedManual}`;
+
+    const wynikHtml = renderValidationErrorsByAgent(outliers.items ?? []);
 
     const dashboardHtml = `
       <div class="section-title">Podsumowanie</div>
@@ -1010,6 +1137,8 @@ async function refreshValidation() {
           <div id="validation-stat-manual" class="dash-value">${dash.stats.verifiedManual}</div>
         </div>
       </div>
+      <div class="section-title">Wynik</div>
+      ${wynikHtml}
       <div class="section-title">Dni</div>
       ${
         dash.days.length === 0
@@ -1039,7 +1168,7 @@ async function refreshValidation() {
 
     const groupsHtml =
       res.groups.length === 0
-        ? `<div class="muted" style="padding:6px 2px 10px;">Brak grup w tym miesiącu.</div>`
+        ? `<div class="muted" style="padding:6px 2px 10px;">Brak grup w tym okresie.</div>`
         : res.groups
             .slice(0, 1000)
             .map((g) => {
@@ -1072,9 +1201,8 @@ async function refreshValidation() {
       const d = el as HTMLDetailsElement;
       d.addEventListener("toggle", () => {
         if (!d.open) return;
-        if (d.classList.contains("validation-day"))
-          void loadValidationDayDetails(d);
-        else void loadValidationGroupDetails(d);
+        if (d.classList.contains("validation-day")) void loadValidationDayDetails(d);
+        else if (d.classList.contains("validation-group")) void loadValidationGroupDetails(d);
       });
     }
 
@@ -1242,7 +1370,13 @@ els.btnValidationRefresh.addEventListener(
   "click",
   () => void refreshValidation(),
 );
+els.validationPeriod.addEventListener("change", () => {
+  updateValidationPeriodUi();
+  void refreshValidation();
+});
 els.validationMonth.addEventListener("change", () => void refreshValidation());
+els.validationYear.addEventListener("change", () => void refreshValidation());
+updateValidationPeriodUi();
 
 if (!updateStatusUnsub) {
   updateStatusUnsub = window.api.onUpdateStatus((s) => {

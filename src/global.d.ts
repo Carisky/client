@@ -16,6 +16,7 @@ import type {
   ValidationGroupKey,
   ValidationGroups,
   ValidationItems,
+  ValidationOutlierErrors,
 } from './preload';
 
 declare global {
@@ -39,6 +40,7 @@ declare global {
       getValidationItems: (month: string, key: ValidationGroupKey) => Promise<ValidationItems>;
       getValidationDashboard: (month: string) => Promise<ValidationDashboard>;
       getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter) => Promise<ValidationDayItems>;
+      getValidationOutlierErrors: (month: string) => Promise<ValidationOutlierErrors>;
       setValidationManualVerified: (rowId: number, verified: boolean) => Promise<{ ok: true }>;
 
       getAppVersion: () => Promise<{ version: string }>;

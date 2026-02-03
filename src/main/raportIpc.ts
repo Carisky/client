@@ -12,6 +12,7 @@ import {
   getValidationDefaultMonth,
   getValidationGroups,
   getValidationItems,
+  getValidationOutlierErrors,
   importRaportFromXlsx,
   rebuildMrnBatch,
   setValidationManualVerified,
@@ -74,6 +75,9 @@ export function registerRaportIpc(): void {
       date: args?.date,
       filter: (args?.filter as never) ?? 'all',
     }),
+  );
+  ipcMain.handle('validation:outlierErrors', async (_evt, args: { month: string }) =>
+    getValidationOutlierErrors({ month: args?.month }),
   );
   ipcMain.handle('validation:setManualVerified', async (_evt, args: { rowId: number; verified: boolean }) =>
     setValidationManualVerified({ rowId: args?.rowId, verified: Boolean(args?.verified) }),

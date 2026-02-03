@@ -471,9 +471,13 @@ export async function getMrnBatchRows(numerMrn: string): Promise<{
   return { numer_mrn, rows: normalized };
 }
 
-function toYmdRange(month: string): { start: string; end: string } {
-  const m = String(month ?? '').trim();
-  const match = /^(\d{4})-(\d{2})$/.exec(m);
+function toYmdRange(period: string): { start: string; end: string } {
+  const m = String(period ?? '').trim();
+
+  const yearMatch = /^(\d{4})$/.exec(m);
+  if (yearMatch) return { start: `${yearMatch[1]}-01-01`, end: `${yearMatch[1]}-12-31` };
+
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(m);
   if (!match) {
     // fallback: current month
     const now = new Date();
@@ -570,6 +574,7 @@ async function queryValidationRepresentativeRows(client: PrismaClient, range: { 
           "data_mrn",
           "numer_mrn",
           "nr_sad",
+          "zglaszajacy",
           "odbiorca",
           "kraj_wysylki",
           "warunki_dostawy",
@@ -607,6 +612,7 @@ async function queryValidationRepresentativeRows(client: PrismaClient, range: { 
     data_mrn: string | null;
     numer_mrn: string | null;
     nr_sad: string | null;
+    zglaszajacy: string | null;
     odbiorca: string | null;
     kraj_wysylki: string | null;
     warunki_dostawy: string | null;
@@ -1040,4 +1046,157 @@ export async function getValidationDayItems(params: {
       outlierSide: it.outlierSide,
     })),
   };
+}
+
+export type ValidationOutlierError = {
+  rowId: number;
+  data_mrn: string | null;
+  numer_mrn: string | null;
+  nr_sad: string | null;
+  agent_celny: string | null;
+  odbiorca: string | null;
+  key: ValidationGroupKey;
+  coef: number;
+  outlierSide: 'low' | 'high';
+  limit: number;
+  discrepancyPct: number | null;
+};
+
+function computeDiscrepancyPct(value: number, limit: number): number | null {
+  const denom = Math.abs(limit);
+  if (!Number.isFinite(denom) || denom < 1e-12) return null;
+  const pct = (Math.abs(value - limit) / denom) * 100;
+  return Number.isFinite(pct) ? pct : null;
+}
+
+export async function getValidationOutlierErrors(params: { month: string }): Promise<{
+  range: { start: string; end: string };
+  items: ValidationOutlierError[];
+}> {
+  const client = await getPrisma();
+  const range = toYmdRange(params.month);
+  const rows = await queryValidationRepresentativeRows(client, range);
+  const manual = await getValidationManualSet(client);
+
+  const computed: Array<
+    ValidationComputedItem & {
+      nr_sad: string | null;
+      agent_celny: string | null;
+    }
+  > = rows.map((r) => {
+    const fees = parseLocaleNumber(r.oplaty_celne_razem);
+    const mass = parseLocaleNumber(r.masa_netto);
+    const coef = fees != null && mass != null && mass !== 0 ? fees / mass : null;
+    const rowIdRaw = Number(r.id);
+    const rowId = Number.isFinite(rowIdRaw) ? rowIdRaw : 0;
+    const verifiedManual = rowId > 0 ? manual.has(rowId) : false;
+    return {
+      rowId,
+      data_mrn: r.data_mrn ?? null,
+      numer_mrn: r.numer_mrn ?? null,
+      nr_sad: r.nr_sad ?? null,
+      agent_celny: r.zglaszajacy ?? null,
+      odbiorca: r.odbiorca ?? null,
+      key: toValidationKey(r),
+      coef,
+      verifiedManual,
+      checkable: false,
+      outlier: false,
+      outlierSide: null as 'low' | 'high' | null,
+    };
+  });
+
+  // Compute outliers per (group key + day), and keep IQR bounds for discrepancy calculation.
+  const groupDay = new Map<string, number[]>();
+  for (let i = 0; i < computed.length; i++) {
+    const it = computed[i];
+    if (!it.data_mrn) continue;
+    if (it.verifiedManual) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    const k = `${JSON.stringify(it.key)}|${it.data_mrn}`;
+    const arr = groupDay.get(k);
+    if (arr) arr.push(i);
+    else groupDay.set(k, [i]);
+  }
+
+  const bounds = new Map<string, { lower: number; upper: number }>();
+  for (const [k, indices] of groupDay.entries()) {
+    if (indices.length < 2) continue;
+    const valuesAsc = indices
+      .map((i) => computed[i].coef as number)
+      .filter((v) => Number.isFinite(v))
+      .sort((a, b) => a - b);
+    if (valuesAsc.length < 2) continue;
+
+    const q1 = quantileSorted(valuesAsc, 0.25);
+    const q3 = quantileSorted(valuesAsc, 0.75);
+    const iqr = q3 - q1;
+    if (!Number.isFinite(iqr)) continue;
+    const lower = q1 - 1.5 * iqr;
+    const upper = q3 + 1.5 * iqr;
+
+    bounds.set(k, { lower, upper });
+
+    for (const i of indices) {
+      const v = computed[i].coef;
+      if (v == null || !Number.isFinite(v)) continue;
+      computed[i].checkable = true;
+      if (v < lower) {
+        computed[i].outlier = true;
+        computed[i].outlierSide = 'low';
+      } else if (v > upper) {
+        computed[i].outlier = true;
+        computed[i].outlierSide = 'high';
+      } else {
+        computed[i].outlier = false;
+        computed[i].outlierSide = null;
+      }
+    }
+  }
+
+  for (let i = 0; i < computed.length; i++) {
+    const it = computed[i];
+    if (it.verifiedManual) continue;
+    if (!it.data_mrn) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    if (!it.checkable) {
+      it.outlier = false;
+      it.outlierSide = null;
+    }
+  }
+
+  const outliers: ValidationOutlierError[] = [];
+  for (const it of computed) {
+    if (!it.data_mrn) continue;
+    if (!it.outlierSide) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+
+    const k = `${JSON.stringify(it.key)}|${it.data_mrn}`;
+    const b = bounds.get(k);
+    if (!b) continue;
+    const limit = it.outlierSide === 'high' ? b.upper : b.lower;
+
+    outliers.push({
+      rowId: it.rowId,
+      data_mrn: it.data_mrn,
+      numer_mrn: it.numer_mrn,
+      nr_sad: it.nr_sad,
+      agent_celny: it.agent_celny,
+      odbiorca: it.odbiorca,
+      key: it.key,
+      coef: it.coef,
+      outlierSide: it.outlierSide,
+      limit,
+      discrepancyPct: computeDiscrepancyPct(it.coef, limit),
+    });
+  }
+
+  outliers.sort(
+    (a, b) =>
+      String(a.agent_celny ?? '').localeCompare(String(b.agent_celny ?? '')) ||
+      String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+      String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+  );
+
+  return { range, items: outliers };
 }
