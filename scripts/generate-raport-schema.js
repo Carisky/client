@@ -7,6 +7,7 @@ const projectRoot = path.resolve(__dirname, '..');
 const inputXlsx = process.argv[2] || path.join(projectRoot, 'data_sample', 'raport.xlsx');
 const prismaSchemaPath = path.join(projectRoot, 'prisma', 'schema.prisma');
 const columnsTsPath = path.join(projectRoot, 'src', 'raportColumns.ts');
+const agentDzialMapPath = path.join(projectRoot, 'resources', 'agent-dzial-map.json');
 
 function normalizeHeader(value) {
   if (value == null) return '';
@@ -48,6 +49,12 @@ function findHeaderRow(aoa) {
 
 function ensureDir(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
+}
+
+function ensureJsonFile(filePath, defaultValue) {
+  ensureDir(filePath);
+  if (fs.existsSync(filePath)) return;
+  fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2) + '\n', 'utf8');
 }
 
 function main() {
@@ -133,12 +140,14 @@ function main() {
 
   ensureDir(prismaSchemaPath);
   ensureDir(columnsTsPath);
+  ensureJsonFile(agentDzialMapPath, {});
 
   fs.writeFileSync(prismaSchemaPath, schemaLines.join('\n'), 'utf8');
   fs.writeFileSync(columnsTsPath, columnsTsLines.join('\n'), 'utf8');
 
   console.log(`OK: wygenerowano ${path.relative(projectRoot, prismaSchemaPath)}`);
   console.log(`OK: wygenerowano ${path.relative(projectRoot, columnsTsPath)}`);
+  console.log(`OK: slownik agent->dzial: ${path.relative(projectRoot, agentDzialMapPath)}`);
   console.log(`Arkusz: ${firstSheetName}`);
   console.log(`Kolumny: ${columns.length}`);
 }

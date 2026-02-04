@@ -1,4 +1,5 @@
 import type {
+  AgentDzialInfo,
   DbInfo,
   ImportProgress,
   ImportResult,
@@ -13,12 +14,14 @@ import type {
   ValidationDashboard,
   ValidationDayFilter,
   ValidationDayItems,
+  ValidationExportFilters,
   ValidationGroupingOptions,
   ValidationGroupKey,
   ValidationGroups,
   ValidationItems,
   ValidationOutlierErrors,
   ValidationExportResult,
+  ValidationExportPreviewResult,
 } from './preload';
 
 declare global {
@@ -32,6 +35,10 @@ declare global {
       getDbInfo: () => Promise<DbInfo>;
       showDbInFolder: () => Promise<boolean>;
 
+      getAgentDzialInfo: () => Promise<AgentDzialInfo>;
+      clearAgentDzialMap: () => Promise<AgentDzialInfo>;
+      showAgentDzialInFolder: () => Promise<boolean>;
+
       rebuildMrnBatch: () => Promise<{ rowsInserted: number; groups: number; scannedAt: string | null }>;
       getMrnBatchMeta: () => Promise<MrnBatchMeta>;
       getMrnBatchGroups: (limit?: number) => Promise<MrnBatchGroup[]>;
@@ -44,7 +51,18 @@ declare global {
       getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationDayItems>;
       getValidationOutlierErrors: (month: string, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationOutlierErrors>;
       setValidationManualVerified: (rowId: number, verified: boolean) => Promise<{ ok: true }>;
-      exportValidationXlsx: (period: string, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationExportResult>;
+      exportValidationXlsx: (
+        period: string,
+        mrn?: string,
+        options?: ValidationGroupingOptions,
+        filters?: ValidationExportFilters,
+      ) => Promise<ValidationExportResult>;
+      previewValidationExport: (
+        period: string,
+        mrn?: string,
+        options?: ValidationGroupingOptions,
+        filters?: ValidationExportFilters,
+      ) => Promise<ValidationExportPreviewResult>;
 
       getAppVersion: () => Promise<{ version: string }>;
       checkForUpdates: () => Promise<UpdateCheckResult>;

@@ -421,6 +421,10 @@ button {
   align-items: center;
 }
 
+.actions-wrap {
+  flex-wrap: wrap;
+}
+
 .page-info {
   color: var(--muted);
   font-size: 13px;
@@ -810,4 +814,86 @@ details.row-accordion > summary::-webkit-details-marker {
 
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
+
+.agent-filter {
+  position: relative;
+  width: 220px;
+}
+
+.agent-filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+}
+
+.agent-filter-btn::after {
+  content: "▾";
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.agent-filter-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: 360px;
+  max-width: min(360px, 86vw);
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(var(--panel-2-rgb), 0.92);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+}
+
+.agent-filter-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.agent-filter-list {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(var(--panel-rgb), 0.35);
+  padding: 6px;
+}
+
+.agent-filter-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.agent-filter-item:hover {
+  background: rgba(var(--panel-2-rgb), 0.55);
+}
+
+.agent-filter-item input {
+  margin: 0;
+}
+
+.agent-filter-empty {
+  padding: 10px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.meta-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: right;
 }

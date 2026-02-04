@@ -54,6 +54,122 @@ export function getDbFilePath(): string {
   return path.join(app.getPath('userData'), 'raport.sqlite');
 }
 
+type AgentDzialInfo = {
+  filePath: string;
+  exists: boolean;
+  rowCount: number;
+  modifiedAt: string | null;
+  error?: string;
+};
+
+function getAgentDzialMapUserFilePath(): string {
+  return path.join(app.getPath('userData'), 'agent-dzial-map.json');
+}
+
+function getBundledAgentDzialMapCandidates(): string[] {
+  const candidates: string[] = [];
+  // Dev: repo-root/client
+  candidates.push(path.resolve(process.cwd(), 'resources', 'agent-dzial-map.json'));
+  // Dev/webpack: resolve from compiled main folder
+  candidates.push(path.resolve(__dirname, '..', '..', 'resources', 'agent-dzial-map.json'));
+  // Packaged: extraResource copied under resources/resources/
+  candidates.push(path.resolve(process.resourcesPath, 'resources', 'agent-dzial-map.json'));
+  // Packaged fallback
+  candidates.push(path.resolve(process.resourcesPath, 'agent-dzial-map.json'));
+  return candidates;
+}
+
+function ensureAgentDzialMapFile(): string {
+  const userFile = getAgentDzialMapUserFilePath();
+  try {
+    if (fs.existsSync(userFile)) return userFile;
+  } catch {
+    // ignore
+  }
+
+  try {
+    fs.mkdirSync(path.dirname(userFile), { recursive: true });
+  } catch {
+    // ignore
+  }
+
+  for (const c of getBundledAgentDzialMapCandidates()) {
+    try {
+      if (!fs.existsSync(c)) continue;
+      fs.copyFileSync(c, userFile);
+      return userFile;
+    } catch {
+      // ignore
+    }
+  }
+
+  try {
+    fs.writeFileSync(userFile, '{}\n', 'utf8');
+  } catch {
+    // ignore
+  }
+  return userFile;
+}
+
+function normalizeAgentKey(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function loadAgentDzialMap(): { map: Map<string, string>; info: AgentDzialInfo } {
+  const filePath = ensureAgentDzialMapFile();
+  const info: AgentDzialInfo = { filePath, exists: false, rowCount: 0, modifiedAt: null };
+
+  let text = '';
+  try {
+    info.exists = fs.existsSync(filePath);
+    if (!info.exists) return { map: new Map(), info };
+    const stat = fs.statSync(filePath);
+    info.modifiedAt = stat.mtime ? stat.mtime.toISOString() : null;
+    text = fs.readFileSync(filePath, 'utf8');
+  } catch (e) {
+    info.error = e instanceof Error ? e.message : String(e);
+    return { map: new Map(), info };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text || '{}');
+  } catch {
+    info.error = 'Niepoprawny JSON (agent-dzial-map.json)';
+    return { map: new Map(), info };
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    info.error = 'Niepoprawny format słownika (oczekiwano obiektu JSON)';
+    return { map: new Map(), info };
+  }
+
+  const out = new Map<string, string>();
+  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+    const agent = normalizeAgentKey(k);
+    const dzial = String(v ?? '').trim();
+    if (!agent || !dzial) continue;
+    out.set(agent, dzial);
+  }
+  info.rowCount = out.size;
+  return { map: out, info };
+}
+
+export async function getAgentDzialInfo(): Promise<AgentDzialInfo> {
+  return loadAgentDzialMap().info;
+}
+
+export async function clearAgentDzialMap(): Promise<AgentDzialInfo> {
+  const filePath = ensureAgentDzialMapFile();
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, '{}\n', 'utf8');
+  } catch {
+    // ignore
+  }
+  return loadAgentDzialMap().info;
+}
+
 export async function getPrisma(): Promise<PrismaClient> {
   if (prisma) return prisma;
 
@@ -716,6 +832,17 @@ function mrnContains(numerMrn: string | null, queryNorm: string): boolean {
   if (!queryNorm) return true;
   const v = String(numerMrn ?? '').trim().toUpperCase().replace(/[\s-]+/g, '');
   return v.includes(queryNorm);
+}
+
+function normalizeTextQuery(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+function textContains(field: string | null | undefined, query: string): boolean {
+  if (!query) return true;
+  const v = String(field ?? '').trim().toLowerCase();
+  return v.includes(query);
 }
 
 export async function getValidationDefaultMonth(): Promise<{ month: string | null }> {
@@ -1653,29 +1780,100 @@ function addJsonTable(ws: xlsx.WorkSheet, rows: Array<Record<string, unknown>>, 
   return row1 + rows.length + 1;
 }
 
-export async function exportValidationWynikiToXlsx(params: {
+type ValidationExportPreviewSection = {
+  title: string;
+  rows: Array<Record<string, unknown>>;
+  totalRows: number;
+  truncated: boolean;
+};
+
+type ValidationExportPreviewSheet = {
+  name: string;
+  sections: ValidationExportPreviewSection[];
+};
+
+export type ValidationExportPreview = {
+  period: string;
+  grouping: string;
+  range: { start: string; end: string };
+  availableAgents: string[];
+  meta: Array<{ key: string; value: string }>;
+  sheets: ValidationExportPreviewSheet[];
+};
+
+export async function previewValidationWynikiExport(params: {
   period: string;
   mrn?: string | null;
   grouping?: unknown;
-  filePath: string;
-}): Promise<{ ok: true }> {
+  filters?: {
+    importer?: string | null;
+    agent?: string[] | string | null;
+    dzial?: string | null;
+  };
+  limit?: number;
+}): Promise<ValidationExportPreview> {
+  const limit = Number.isFinite(Number(params.limit)) ? Math.max(10, Math.min(500, Number(params.limit))) : 200;
+
   const client = await getPrisma();
   const range = toYmdRange(params.period);
   const { grouping } = getValidationGroupingConfig(params);
   const anchor = range.start;
   const rows = await queryValidationRepresentativeRows(client, range);
   const manual = await getValidationManualSet(client);
+  const { map: agentDzialMap, info: agentDzialInfo } = loadAgentDzialMap();
+
+  const availableAgentMap = new Map<string, string>();
+  for (const r of rows) {
+    const v = String(r.zglaszajacy ?? '').trim();
+    if (!v) continue;
+    const k = normalizeAgentKey(v);
+    if (!k || availableAgentMap.has(k)) continue;
+    availableAgentMap.set(k, v);
+  }
+  const availableAgents = Array.from(availableAgentMap.values()).sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+  const filters = params.filters ?? {};
+  const importerQ = normalizeTextQuery(filters.importer);
+  const dzialQ = normalizeTextQuery(filters.dzial);
+  const agentRaw = filters.agent;
+  const agentList = Array.isArray(agentRaw)
+    ? agentRaw
+    : typeof agentRaw === 'string'
+      ? [agentRaw]
+      : [];
+  const agentKeys = new Set(
+    agentList.map((a) => normalizeAgentKey(a)).filter(Boolean),
+  );
+
+  const filteredRows = rows.filter((r) => {
+    if (importerQ && !textContains(r.odbiorca, importerQ)) return false;
+    if (agentKeys.size) {
+      const ak = normalizeAgentKey(r.zglaszajacy);
+      if (!ak || !agentKeys.has(ak)) return false;
+    }
+
+    if (dzialQ) {
+      const agentKey = normalizeAgentKey(r.zglaszajacy);
+      const dz = (agentKey ? agentDzialMap.get(agentKey) : null) ?? '';
+      if (!dz || !textContains(dz, dzialQ)) return false;
+    }
+
+    return true;
+  });
 
   type ExportItem = ValidationComputedItem & {
     nr_sad: string | null;
     agent_celny: string | null;
+    dzial: string | null;
     fees: number | null;
     mass: number | null;
     bucketEnd: string | null;
     _boundsKey: string;
   };
 
-  const items: ExportItem[] = rows.map((r) => {
+  const items: ExportItem[] = filteredRows.map((r) => {
     const fees = parseLocaleNumber(r.oplaty_celne_razem);
     const mass = parseLocaleNumber(r.masa_netto);
     const coef = fees != null && mass != null && mass !== 0 ? fees / mass : null;
@@ -1686,6 +1884,8 @@ export async function exportValidationWynikiToXlsx(params: {
     const bucketStart = data_mrn ? bucketStartForDate(data_mrn, anchor, grouping) : null;
     const key = toValidationKey(r);
     const boundsKey = bucketStart ? `${JSON.stringify(key)}|${bucketStart}` : `${JSON.stringify(key)}|`;
+    const agentKey = normalizeAgentKey(r.zglaszajacy);
+    const dzial = (agentKey ? agentDzialMap.get(agentKey) : null) ?? null;
     return {
       rowId,
       data_mrn,
@@ -1694,6 +1894,7 @@ export async function exportValidationWynikiToXlsx(params: {
       numer_mrn: r.numer_mrn ?? null,
       nr_sad: r.nr_sad ?? null,
       agent_celny: r.zglaszajacy ?? null,
+      dzial,
       odbiorca: r.odbiorca ?? null,
       key,
       fees,
@@ -1768,10 +1969,11 @@ export async function exportValidationWynikiToXlsx(params: {
       String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
   );
 
-  const agentMap = new Map<string, { agent: string; total: number; high: number; low: number }>();
+  const agentMap = new Map<string, { agent: string; dzial: string | null; total: number; high: number; low: number }>();
   for (const o of outliers) {
-    const agent = String(o.agent_celny ?? '').trim() || '—';
-    const agg = agentMap.get(agent) ?? { agent, total: 0, high: 0, low: 0 };
+    const agent = String(o.agent_celny ?? '').trim() || 'вЂ”';
+    const dzial = agentDzialMap.get(normalizeAgentKey(agent)) ?? null;
+    const agg = agentMap.get(agent) ?? { agent, dzial, total: 0, high: 0, low: 0 };
     agg.total += 1;
     if (o.outlierSide === 'high') agg.high += 1;
     if (o.outlierSide === 'low') agg.low += 1;
@@ -1788,6 +1990,390 @@ export async function exportValidationWynikiToXlsx(params: {
     ['RangeEnd', range.end],
     ['Grouping', grouping],
     ['MRN filter', params.mrn ?? ''],
+    ['Importer filter', filters.importer ?? ''],
+    ['Agent filter', agentList.join(', ')],
+    ['Dzial filter', filters.dzial ?? ''],
+    ['Agent->Dzial map', `${agentDzialInfo.rowCount} (${agentDzialInfo.filePath})`],
+    ['Coef formula', 'oplaty_celne_razem / masa_netto'],
+    ['IQR rule', 'lower=Q1-1.5*IQR, upper=Q3+1.5*IQR'],
+    ['OutliersHigh', stats.outliersHigh],
+    ['OutliersLow', stats.outliersLow],
+    ['Singles', stats.singles],
+    ['ManualVerified', stats.verifiedManual],
+    ['ItemsTotal', base.length],
+  ];
+
+  const osobySummary = agents.map((a) => ({ Agent: a.agent, Dzial: a.dzial ?? '', Errors: a.total, High: a.high, Low: a.low }));
+  const osobyErrors = outliers.map((o) => {
+    const b = o.bound as ValidationIqrBounds | null;
+    const key = o.key;
+    return {
+      Agent: String(o.agent_celny ?? '').trim() || 'вЂ”',
+      Dzial: o.dzial ?? '',
+      DataMRN: o.data_mrn,
+      MRN: o.numer_mrn,
+      NrSAD: o.nr_sad,
+      Odbiorca: key?.odbiorca ?? '',
+      KodTowaru: key?.kod_towaru ?? '',
+      Waluta: key?.waluta ?? '',
+      KursWaluty: key?.kurs_waluty ?? '',
+      WarunkiDostawy: key?.warunki_dostawy ?? '',
+      KrajWysylki: key?.kraj_wysylki ?? '',
+      TransportRodzaj: key?.transport_na_granicy_rodzaj ?? '',
+      OplatyCelneRazem: o.fees,
+      MasaNetto: o.mass,
+      Coef: o.coef,
+      Side: o.outlierSide,
+      Limit: o.limit,
+      Q1: b?.q1 ?? null,
+      Q3: b?.q3 ?? null,
+      IQR: b?.iqr ?? null,
+      Lower: b?.lower ?? null,
+      Upper: b?.upper ?? null,
+      DiscrepancyPct: o.discrepancyPct,
+    };
+  });
+
+  const dniSummary = days.map((d) => ({
+    DateStart: d.date,
+    DateEnd: d.end,
+    Total: d.total,
+    OutliersHigh: d.outliersHigh,
+    OutliersLow: d.outliersLow,
+    Singles: d.singles,
+  }));
+
+  const dniItems = base
+    .slice()
+    .sort(
+      (a, b) =>
+        String(a.bucketStart ?? '').localeCompare(String(b.bucketStart ?? '')) ||
+        String(a.outlierSide ?? '').localeCompare(String(b.outlierSide ?? '')) ||
+        String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+        String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+    )
+    .map((it) => {
+      const b = bounds.get(it._boundsKey) ?? null;
+      const limit = it.outlierSide ? (b ? (it.outlierSide === 'high' ? b.upper : b.lower) : null) : null;
+      const discrepancyPct =
+        it.outlierSide && it.coef != null && Number.isFinite(it.coef) && limit != null ? computeDiscrepancyPct(it.coef, limit) : null;
+      const key = it.key;
+      return {
+        BucketStart: it.bucketStart,
+        BucketEnd: it.bucketEnd,
+        DataMRN: it.data_mrn,
+        MRN: it.numer_mrn,
+        NrSAD: it.nr_sad,
+        Agent: it.agent_celny,
+        Dzial: it.dzial,
+        Odbiorca: key?.odbiorca ?? '',
+        KodTowaru: key?.kod_towaru ?? '',
+        Waluta: key?.waluta ?? '',
+        KursWaluty: key?.kurs_waluty ?? '',
+        WarunkiDostawy: key?.warunki_dostawy ?? '',
+        KrajWysylki: key?.kraj_wysylki ?? '',
+        TransportRodzaj: key?.transport_na_granicy_rodzaj ?? '',
+        OplatyCelneRazem: it.fees,
+        MasaNetto: it.mass,
+        Coef: it.coef,
+        ManualVerified: it.verifiedManual,
+        Checkable: it.checkable,
+        OutlierSide: it.outlierSide,
+        Limit: limit,
+        Q1: b?.q1 ?? null,
+        Q3: b?.q3 ?? null,
+        IQR: b?.iqr ?? null,
+        Lower: b?.lower ?? null,
+        Upper: b?.upper ?? null,
+        DiscrepancyPct: discrepancyPct,
+        RowId: it.rowId,
+      };
+    });
+
+  const grupySummary = groups.map((g) => ({
+    Count: g.count,
+    Odbiorca: g.key.odbiorca,
+    KodTowaru: g.key.kod_towaru,
+    Waluta: g.key.waluta,
+    KursWaluty: g.key.kurs_waluty,
+    WarunkiDostawy: g.key.warunki_dostawy,
+    KrajWysylki: g.key.kraj_wysylki,
+    TransportRodzaj: g.key.transport_na_granicy_rodzaj,
+  }));
+
+  const grupyItems = base
+    .slice()
+    .sort(
+      (a, b) =>
+        JSON.stringify(a.key).localeCompare(JSON.stringify(b.key)) ||
+        String(a.bucketStart ?? '').localeCompare(String(b.bucketStart ?? '')) ||
+        String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+        String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+    )
+    .map((it) => {
+      const b = bounds.get(it._boundsKey) ?? null;
+      const limit = it.outlierSide ? (b ? (it.outlierSide === 'high' ? b.upper : b.lower) : null) : null;
+      const discrepancyPct =
+        it.outlierSide && it.coef != null && Number.isFinite(it.coef) && limit != null ? computeDiscrepancyPct(it.coef, limit) : null;
+      const key = it.key;
+      return {
+        Odbiorca: key?.odbiorca ?? '',
+        KodTowaru: key?.kod_towaru ?? '',
+        Waluta: key?.waluta ?? '',
+        KursWaluty: key?.kurs_waluty ?? '',
+        WarunkiDostawy: key?.warunki_dostawy ?? '',
+        KrajWysylki: key?.kraj_wysylki ?? '',
+        TransportRodzaj: key?.transport_na_granicy_rodzaj ?? '',
+        BucketStart: it.bucketStart,
+        BucketEnd: it.bucketEnd,
+        DataMRN: it.data_mrn,
+        MRN: it.numer_mrn,
+        NrSAD: it.nr_sad,
+        Agent: it.agent_celny,
+        Dzial: it.dzial,
+        OplatyCelneRazem: it.fees,
+        MasaNetto: it.mass,
+        Coef: it.coef,
+        ManualVerified: it.verifiedManual,
+        Checkable: it.checkable,
+        OutlierSide: it.outlierSide,
+        Limit: limit,
+        Q1: b?.q1 ?? null,
+        Q3: b?.q3 ?? null,
+        IQR: b?.iqr ?? null,
+        Lower: b?.lower ?? null,
+        Upper: b?.upper ?? null,
+        DiscrepancyPct: discrepancyPct,
+        RowId: it.rowId,
+      };
+    });
+
+  const take = (rows: Array<Record<string, unknown>>): { rows: Array<Record<string, unknown>>; totalRows: number; truncated: boolean } => {
+    const totalRows = rows.length;
+    if (totalRows <= limit) return { rows, totalRows, truncated: false };
+    return { rows: rows.slice(0, limit), totalRows, truncated: true };
+  };
+
+  const meta = metaRows.map(([k, v]) => ({ key: String(k), value: v == null ? '' : String(v) }));
+
+  const osobySummaryTake = take(osobySummary);
+  const osobyErrorsTake = take(osobyErrors);
+  const dniSummaryTake = take(dniSummary);
+  const dniItemsTake = take(dniItems);
+  const grupySummaryTake = take(grupySummary);
+  const grupyItemsTake = take(grupyItems);
+
+  return {
+    period: params.period,
+    grouping,
+    range,
+    availableAgents,
+    meta,
+    sheets: [
+      {
+        name: 'Osoby',
+        sections: [
+          { title: 'Osoby (podsumowanie)', ...osobySummaryTake },
+          { title: 'Osoby (lista bledow / odchylen)', ...osobyErrorsTake },
+        ],
+      },
+      {
+        name: 'Dni',
+        sections: [
+          { title: 'Dni (podsumowanie)', ...dniSummaryTake },
+          { title: 'Dni (pozycje)', ...dniItemsTake },
+        ],
+      },
+      {
+        name: 'Grupy',
+        sections: [
+          { title: 'Grupy (podsumowanie)', ...grupySummaryTake },
+          { title: 'Grupy (pozycje)', ...grupyItemsTake },
+        ],
+      },
+    ],
+  };
+}
+
+export async function exportValidationWynikiToXlsx(params: {
+  period: string;
+  mrn?: string | null;
+  grouping?: unknown;
+  filters?: {
+    importer?: string | null;
+    agent?: string[] | string | null;
+    dzial?: string | null;
+  };
+  filePath: string;
+}): Promise<{ ok: true }> {
+  const client = await getPrisma();
+  const range = toYmdRange(params.period);
+  const { grouping } = getValidationGroupingConfig(params);
+  const anchor = range.start;
+  const rows = await queryValidationRepresentativeRows(client, range);
+  const manual = await getValidationManualSet(client);
+  const { map: agentDzialMap, info: agentDzialInfo } = loadAgentDzialMap();
+
+  const filters = params.filters ?? {};
+  const importerQ = normalizeTextQuery(filters.importer);
+  const dzialQ = normalizeTextQuery(filters.dzial);
+  const agentRaw = filters.agent;
+  const agentList = Array.isArray(agentRaw)
+    ? agentRaw
+    : typeof agentRaw === 'string'
+      ? [agentRaw]
+      : [];
+  const agentKeys = new Set(
+    agentList.map((a) => normalizeAgentKey(a)).filter(Boolean),
+  );
+
+  const filteredRows = rows.filter((r) => {
+    if (importerQ && !textContains(r.odbiorca, importerQ)) return false;
+    if (agentKeys.size) {
+      const ak = normalizeAgentKey(r.zglaszajacy);
+      if (!ak || !agentKeys.has(ak)) return false;
+    }
+
+    if (dzialQ) {
+      const agentKey = normalizeAgentKey(r.zglaszajacy);
+      const dz = (agentKey ? agentDzialMap.get(agentKey) : null) ?? '';
+      if (!dz || !textContains(dz, dzialQ)) return false;
+    }
+
+    return true;
+  });
+
+  type ExportItem = ValidationComputedItem & {
+    nr_sad: string | null;
+    agent_celny: string | null;
+    dzial: string | null;
+    fees: number | null;
+    mass: number | null;
+    bucketEnd: string | null;
+    _boundsKey: string;
+  };
+
+  const items: ExportItem[] = filteredRows.map((r) => {
+    const fees = parseLocaleNumber(r.oplaty_celne_razem);
+    const mass = parseLocaleNumber(r.masa_netto);
+    const coef = fees != null && mass != null && mass !== 0 ? fees / mass : null;
+    const rowIdRaw = Number(r.id);
+    const rowId = Number.isFinite(rowIdRaw) ? rowIdRaw : 0;
+    const verifiedManual = rowId > 0 ? manual.has(rowId) : false;
+    const data_mrn = r.data_mrn ?? null;
+    const bucketStart = data_mrn ? bucketStartForDate(data_mrn, anchor, grouping) : null;
+    const key = toValidationKey(r);
+    const boundsKey = bucketStart ? `${JSON.stringify(key)}|${bucketStart}` : `${JSON.stringify(key)}|`;
+    const agentKey = normalizeAgentKey(r.zglaszajacy);
+    const dzial = (agentKey ? agentDzialMap.get(agentKey) : null) ?? null;
+    return {
+      rowId,
+      data_mrn,
+      bucketStart,
+      bucketEnd: bucketStart ? bucketEndFromStart(bucketStart, grouping) : null,
+      numer_mrn: r.numer_mrn ?? null,
+      nr_sad: r.nr_sad ?? null,
+      agent_celny: r.zglaszajacy ?? null,
+      dzial,
+      odbiorca: r.odbiorca ?? null,
+      key,
+      fees,
+      mass,
+      coef,
+      verifiedManual,
+      checkable: false,
+      outlier: false,
+      outlierSide: null as 'low' | 'high' | null,
+      _boundsKey: boundsKey,
+    };
+  });
+
+  const bounds = computeIqrBoundsAndFlags(items);
+
+  const mrnNorm = normalizeMrnQuery(params.mrn);
+  const base = mrnNorm ? filterToMrnCohorts(items, mrnNorm) : items;
+
+  const dayMap = new Map<
+    string,
+    { date: string; end: string; outliersHigh: number; outliersLow: number; singles: number; total: number }
+  >();
+  let verifiedManual = 0;
+  for (const it of base) {
+    if (it.verifiedManual) verifiedManual += 1;
+    if (!it.bucketStart) continue;
+    if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    const date = it.bucketStart;
+    const end = it.bucketEnd ?? date;
+    const agg = dayMap.get(date) ?? { date, end, outliersHigh: 0, outliersLow: 0, singles: 0, total: 0 };
+    if (!it.verifiedManual) agg.total += 1;
+    if (it.outlierSide === 'high') agg.outliersHigh += 1;
+    if (it.outlierSide === 'low') agg.outliersLow += 1;
+    if (!it.verifiedManual && !it.checkable) agg.singles += 1;
+    dayMap.set(date, agg);
+  }
+  const days = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const stats = {
+    outliersHigh: days.reduce((s, d) => s + d.outliersHigh, 0),
+    outliersLow: days.reduce((s, d) => s + d.outliersLow, 0),
+    singles: days.reduce((s, d) => s + d.singles, 0),
+    verifiedManual,
+  };
+
+  const groupMap = new Map<string, { key: ValidationGroupKey; count: number }>();
+  for (const it of base) {
+    const k = JSON.stringify(it.key);
+    const existing = groupMap.get(k);
+    if (existing) existing.count += 1;
+    else groupMap.set(k, { key: it.key, count: 1 });
+  }
+  const groups = Array.from(groupMap.values()).sort((a, b) => b.count - a.count);
+
+  const outliers = base
+    .filter((it) => it.outlierSide && it.coef != null && Number.isFinite(it.coef) && it.bucketStart)
+    .map((it) => {
+      const b = bounds.get(it._boundsKey);
+      const limit = b ? (it.outlierSide === 'high' ? b.upper : b.lower) : null;
+      return {
+        ...it,
+        bound: b ?? null,
+        limit,
+        discrepancyPct: limit == null ? null : computeDiscrepancyPct(it.coef as number, limit),
+      };
+    });
+
+  outliers.sort(
+    (a, b) =>
+      String(a.agent_celny ?? '').localeCompare(String(b.agent_celny ?? '')) ||
+      (b.discrepancyPct ?? -1) - (a.discrepancyPct ?? -1) ||
+      String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+      String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+  );
+
+  const agentMap = new Map<string, { agent: string; dzial: string | null; total: number; high: number; low: number }>();
+  for (const o of outliers) {
+    const agent = String(o.agent_celny ?? '').trim() || '—';
+    const dzial = agentDzialMap.get(normalizeAgentKey(agent)) ?? null;
+    const agg = agentMap.get(agent) ?? { agent, dzial, total: 0, high: 0, low: 0 };
+    agg.total += 1;
+    if (o.outlierSide === 'high') agg.high += 1;
+    if (o.outlierSide === 'low') agg.low += 1;
+    agentMap.set(agent, agg);
+  }
+  const agents = Array.from(agentMap.values()).sort((a, b) => b.total - a.total || a.agent.localeCompare(b.agent));
+
+  const exportedAt = new Date().toISOString();
+  const metaRows: Array<[string, string | number | null | undefined]> = [
+    ['Raport', 'Wyniki (IQR)'],
+    ['ExportedAt', exportedAt],
+    ['Period', params.period],
+    ['RangeStart', range.start],
+    ['RangeEnd', range.end],
+    ['Grouping', grouping],
+    ['MRN filter', params.mrn ?? ''],
+    ['Importer filter', filters.importer ?? ''],
+    ['Agent filter', agentList.join(', ')],
+    ['Dzial filter', filters.dzial ?? ''],
+    ['Agent->Dzial map', `${agentDzialInfo.rowCount} (${agentDzialInfo.filePath})`],
     ['Coef formula', 'oplaty_celne_razem / masa_netto'],
     ['IQR rule', 'lower=Q1-1.5*IQR, upper=Q3+1.5*IQR'],
     ['OutliersHigh', stats.outliersHigh],
@@ -1807,7 +2393,7 @@ export async function exportValidationWynikiToXlsx(params: {
   r1 = addSectionTitle(wsOsoby, 'Osoby (podsumowanie)', r1);
   r1 = addJsonTable(
     wsOsoby,
-    agents.map((a) => ({ Agent: a.agent, Errors: a.total, High: a.high, Low: a.low })),
+    agents.map((a) => ({ Agent: a.agent, Dzial: a.dzial ?? '', Errors: a.total, High: a.high, Low: a.low })),
     r1,
   );
   r1 += 1;
@@ -1819,6 +2405,7 @@ export async function exportValidationWynikiToXlsx(params: {
       const key = o.key;
       return {
         Agent: String(o.agent_celny ?? '').trim() || '—',
+        Dzial: o.dzial ?? '',
         DataMRN: o.data_mrn,
         MRN: o.numer_mrn,
         NrSAD: o.nr_sad,
@@ -1914,6 +2501,7 @@ export async function exportValidationWynikiToXlsx(params: {
         MRN: it.numer_mrn,
         NrSAD: it.nr_sad,
         Agent: it.agent_celny,
+        Dzial: it.dzial,
         Odbiorca: key?.odbiorca ?? '',
         KodTowaru: key?.kod_towaru ?? '',
         Waluta: key?.waluta ?? '',
@@ -1993,6 +2581,7 @@ export async function exportValidationWynikiToXlsx(params: {
         MRN: it.numer_mrn,
         NrSAD: it.nr_sad,
         Agent: it.agent_celny,
+        Dzial: it.dzial,
         OplatyCelneRazem: it.fees,
         MasaNetto: it.mass,
         Coef: it.coef,

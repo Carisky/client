@@ -2,7 +2,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "./index.css";
 import { RAPORT_COLUMNS } from "./raportColumns";
 
-type TabName = "import" | "preview" | "dashboard" | "validation" | "settings";
+type TabName = "import" | "preview" | "dashboard" | "validation" | "export" | "settings";
 
 const els = {
   tabImportBtn: document.getElementById("tab-btn-import") as HTMLButtonElement,
@@ -15,6 +15,7 @@ const els = {
   tabValidationBtn: document.getElementById(
     "tab-btn-validation",
   ) as HTMLButtonElement,
+  tabExportBtn: document.getElementById("tab-btn-export") as HTMLButtonElement,
   tabSettingsBtn: document.getElementById(
     "tab-btn-settings",
   ) as HTMLButtonElement,
@@ -23,6 +24,7 @@ const els = {
   tabPreview: document.getElementById("tab-preview") as HTMLElement,
   tabDashboard: document.getElementById("tab-dashboard") as HTMLElement,
   tabValidation: document.getElementById("tab-validation") as HTMLElement,
+  tabExport: document.getElementById("tab-export") as HTMLElement,
   tabSettings: document.getElementById("tab-settings") as HTMLElement,
 
   importBtn: document.getElementById("btn-import") as HTMLButtonElement,
@@ -82,16 +84,44 @@ const els = {
   btnValidationRefresh: document.getElementById(
     "btn-validation-refresh",
   ) as HTMLButtonElement,
-  btnValidationExport: document.getElementById(
-    "btn-validation-export",
-  ) as HTMLButtonElement,
   validationMeta: document.getElementById("validation-meta") as HTMLElement,
   validationGroups: document.getElementById("validation-groups") as HTMLElement,
   validationStatus: document.getElementById("validation-status") as HTMLElement,
 
+  exportPeriod: document.getElementById("export-period") as HTMLSelectElement,
+  exportMonth: document.getElementById("export-month") as HTMLInputElement,
+  exportYear: document.getElementById("export-year") as HTMLInputElement,
+  exportGrouping: document.getElementById("export-grouping") as HTMLSelectElement,
+  exportMrnFilter: document.getElementById("export-mrn-filter") as HTMLInputElement,
+  btnExportRefresh: document.getElementById("btn-export-refresh") as HTMLButtonElement,
+  btnExportDo: document.getElementById("btn-export-do") as HTMLButtonElement,
+  exportMeta: document.getElementById("export-meta") as HTMLElement,
+  exportPreview: document.getElementById("export-preview") as HTMLElement,
+  exportStatus: document.getElementById("export-status") as HTMLElement,
+
+  exportFilterImporter: document.getElementById("export-filter-importer") as HTMLInputElement,
+  exportAgentBtn: document.getElementById("export-filter-agent-btn") as HTMLButtonElement,
+  exportAgentPopover: document.getElementById("export-filter-agent-popover") as HTMLElement,
+  exportAgentSearch: document.getElementById("export-filter-agent-search") as HTMLInputElement,
+  exportAgentList: document.getElementById("export-filter-agent-list") as HTMLElement,
+  btnExportAgentClear: document.getElementById("export-filter-agent-clear") as HTMLButtonElement,
+  exportFilterDzial: document.getElementById("export-filter-dzial") as HTMLInputElement,
+  btnExportFiltersClear: document.getElementById("btn-export-filters-clear") as HTMLButtonElement,
+
   dbPath: document.getElementById("db-path") as HTMLElement,
   btnShowDb: document.getElementById("btn-show-db") as HTMLButtonElement,
   btnClear: document.getElementById("btn-clear") as HTMLButtonElement,
+
+  agentDzialMeta: document.getElementById("agent-dzial-meta") as HTMLElement,
+  agentDzialStatus: document.getElementById(
+    "agent-dzial-status",
+  ) as HTMLElement,
+  btnAgentDzialShow: document.getElementById(
+    "btn-agent-dzial-show",
+  ) as HTMLButtonElement,
+  btnAgentDzialClear: document.getElementById(
+    "btn-agent-dzial-clear",
+  ) as HTMLButtonElement,
 };
 
 const state = {
@@ -316,6 +346,7 @@ function setTab(name: TabName) {
   els.tabPreviewBtn.classList.toggle("active", name === "preview");
   els.tabDashboardBtn.classList.toggle("active", name === "dashboard");
   els.tabValidationBtn.classList.toggle("active", name === "validation");
+  els.tabExportBtn.classList.toggle("active", name === "export");
   els.tabSettingsBtn.classList.toggle("active", name === "settings");
 
   els.tabImportBtn.setAttribute("aria-selected", String(name === "import"));
@@ -328,17 +359,20 @@ function setTab(name: TabName) {
     "aria-selected",
     String(name === "validation"),
   );
+  els.tabExportBtn.setAttribute("aria-selected", String(name === "export"));
   els.tabSettingsBtn.setAttribute("aria-selected", String(name === "settings"));
 
   els.tabImport.classList.toggle("hidden", name !== "import");
   els.tabPreview.classList.toggle("hidden", name !== "preview");
   els.tabDashboard.classList.toggle("hidden", name !== "dashboard");
   els.tabValidation.classList.toggle("hidden", name !== "validation");
+  els.tabExport.classList.toggle("hidden", name !== "export");
   els.tabSettings.classList.toggle("hidden", name !== "settings");
 
   if (name === "preview") void refreshPreview();
   if (name === "dashboard") void refreshDashboard();
   if (name === "validation") void refreshValidation();
+  if (name === "export") void refreshExportPreview();
   if (name === "settings") void refreshSettings();
 }
 
@@ -420,13 +454,42 @@ async function refreshPreview() {
   }
 }
 
+function renderAgentDzialMetaText(info: {
+  filePath: string;
+  exists: boolean;
+  rowCount: number;
+  modifiedAt: string | null;
+  error?: string;
+} | null): string {
+  if (!info) return "—";
+  if (info.error) return `Błąd: ${info.error}`;
+  const rows = info.rowCount ?? 0;
+  const mod = info.modifiedAt ? ` • ${new Date(info.modifiedAt).toLocaleString("pl-PL")}` : "";
+  return `${rows} pozycji • ${info.filePath}${mod}`;
+}
+
+async function refreshAgentDzialUi(): Promise<void> {
+  setStatus(els.agentDzialStatus, "");
+  try {
+    const info = await window.api.getAgentDzialInfo();
+    els.agentDzialMeta.textContent = renderAgentDzialMetaText(info);
+    els.btnAgentDzialClear.disabled = !info || info.rowCount === 0;
+  } catch (e: unknown) {
+    els.agentDzialMeta.textContent = "—";
+    els.btnAgentDzialClear.disabled = true;
+    setStatus(els.agentDzialStatus, `Błąd: ${errorMessage(e)}`);
+  }
+}
+
 async function refreshSettings() {
   setStatus(els.settingsStatus, "");
+  setStatus(els.agentDzialStatus, "");
   setBusy(true);
   try {
     const db = await window.api.getDbInfo();
     els.dbPath.textContent =
       db.filePath + (db.exists ? "" : " (nie utworzono)");
+    await refreshAgentDzialUi();
   } catch (e: unknown) {
     els.dbPath.textContent = "—";
     setStatus(els.settingsStatus, `Błąd: ${errorMessage(e)}`);
@@ -711,6 +774,28 @@ function updateValidationPeriodUi(): void {
   els.validationYear.classList.toggle("hidden", mode !== "year");
 }
 
+function getExportPeriodMode(): ValidationPeriodMode {
+  const v = String(els.exportPeriod?.value ?? "month").trim();
+  return v === "year" ? "year" : "month";
+}
+
+function getExportPeriodValue(): string {
+  const mode = getExportPeriodMode();
+  if (mode === "year") {
+    const raw = String(els.exportYear.value ?? "").trim();
+    const y = Number.parseInt(raw, 10);
+    if (!Number.isFinite(y) || y < 1900 || y > 2200) return "";
+    return String(y).padStart(4, "0");
+  }
+  return String(els.exportMonth.value ?? "").trim();
+}
+
+function updateExportPeriodUi(): void {
+  const mode = getExportPeriodMode();
+  els.exportMonth.classList.toggle("hidden", mode !== "month");
+  els.exportYear.classList.toggle("hidden", mode !== "year");
+}
+
 type ValidationDateGrouping =
   | "day"
   | "days2"
@@ -720,6 +805,7 @@ type ValidationDateGrouping =
   | "months2";
 
 const VALIDATION_GROUPING_STORAGE_KEY = "validationGrouping";
+const EXPORT_GROUPING_STORAGE_KEY = "exportGrouping";
 
 function normalizeValidationDateGrouping(value: unknown): ValidationDateGrouping {
   const v = String(value ?? "").trim();
@@ -736,10 +822,24 @@ function getValidationGroupingOptions(): { grouping: ValidationDateGrouping } {
   return { grouping };
 }
 
+function getExportGroupingOptions(): { grouping: ValidationDateGrouping } {
+  const grouping = normalizeValidationDateGrouping(els.exportGrouping?.value);
+  return { grouping };
+}
+
 function setValidationGroupingValue(value: ValidationDateGrouping): void {
   els.validationGrouping.value = value;
   try {
     localStorage.setItem(VALIDATION_GROUPING_STORAGE_KEY, value);
+  } catch {
+    // ignore
+  }
+}
+
+function setExportGroupingValue(value: ValidationDateGrouping): void {
+  els.exportGrouping.value = value;
+  try {
+    localStorage.setItem(EXPORT_GROUPING_STORAGE_KEY, value);
   } catch {
     // ignore
   }
@@ -752,6 +852,7 @@ function formatBucketLabel(start: string, end: string): string {
 }
 
 const VALIDATION_MRN_FILTER_STORAGE_KEY = "validationMrnFilter";
+const EXPORT_MRN_FILTER_STORAGE_KEY = "exportMrnFilter";
 
 function getValidationMrnFilterValue(): string {
   return String(els.validationMrnFilter?.value ?? "").trim();
@@ -770,6 +871,177 @@ function setValidationMrnFilterValue(value: string): void {
 function updateValidationMrnFilterUi(): void {
   const v = getValidationMrnFilterValue();
   els.btnValidationMrnClear.classList.toggle("d-none", v.length === 0);
+}
+
+function getExportMrnFilterValue(): string {
+  return String(els.exportMrnFilter?.value ?? "").trim();
+}
+
+type ExportFilters = {
+  importer?: string;
+  agent?: string[];
+  dzial?: string;
+};
+
+function normalizeAgentKey(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+type ExportAgentOption = { key: string; name: string };
+let exportAgentOptions: ExportAgentOption[] = [];
+let exportAgentSelectedKeys = new Set<string>();
+
+let exportAgentOutsideClickUnsub: (() => void) | null = null;
+let exportAgentKeydownUnsub: (() => void) | null = null;
+
+function getSelectedExportAgents(): string[] {
+  if (!exportAgentSelectedKeys.size || !exportAgentOptions.length) return [];
+  const map = new Map(exportAgentOptions.map((o) => [o.key, o.name] as const));
+  const out: string[] = [];
+  for (const k of exportAgentSelectedKeys) {
+    const v = map.get(k);
+    if (v) out.push(v);
+  }
+  out.sort((a, b) => a.localeCompare(b));
+  return out;
+}
+
+function updateExportAgentUi(): void {
+  const selected = getSelectedExportAgents();
+  els.btnExportAgentClear.disabled = selected.length === 0;
+
+  if (!exportAgentOptions.length) {
+    els.exportAgentBtn.textContent = "Agent celny: Ładowanie…";
+    els.exportAgentBtn.disabled = true;
+    return;
+  }
+
+  els.exportAgentBtn.disabled = false;
+  if (selected.length === 0) {
+    els.exportAgentBtn.textContent = "Agent celny: wszyscy";
+  } else if (selected.length === 1) {
+    els.exportAgentBtn.textContent = `Agent celny: ${selected[0]}`;
+  } else {
+    els.exportAgentBtn.textContent = `Agent celny: ${selected.length} wybranych`;
+  }
+}
+
+function renderExportAgentList(): void {
+  const q = String(els.exportAgentSearch.value ?? "").trim().toLowerCase();
+  const items = q
+    ? exportAgentOptions.filter((o) => o.name.toLowerCase().includes(q))
+    : exportAgentOptions;
+
+  els.exportAgentList.innerHTML = "";
+  if (!items.length) {
+    els.exportAgentList.innerHTML = `<div class="agent-filter-empty">Brak wyników.</div>`;
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  for (const o of items) {
+    const label = document.createElement("label");
+    label.className = "agent-filter-item";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "form-check-input";
+    input.dataset.key = o.key;
+    input.checked = exportAgentSelectedKeys.has(o.key);
+
+    const span = document.createElement("span");
+    span.textContent = o.name;
+
+    label.appendChild(input);
+    label.appendChild(span);
+    frag.appendChild(label);
+  }
+  els.exportAgentList.appendChild(frag);
+}
+
+function setExportAgentPopoverOpen(open: boolean): void {
+  els.exportAgentPopover.classList.toggle("hidden", !open);
+  if (open) {
+    renderExportAgentList();
+    els.exportAgentSearch.focus();
+    els.exportAgentSearch.select();
+
+    if (!exportAgentOutsideClickUnsub) {
+      const onDown = (e: MouseEvent) => {
+        const target = e.target as Node | null;
+        if (!target) return;
+        if (els.exportAgentPopover.contains(target)) return;
+        if (els.exportAgentBtn.contains(target)) return;
+        setExportAgentPopoverOpen(false);
+      };
+      document.addEventListener("mousedown", onDown, true);
+      exportAgentOutsideClickUnsub = () =>
+        document.removeEventListener("mousedown", onDown, true);
+    }
+
+    if (!exportAgentKeydownUnsub) {
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setExportAgentPopoverOpen(false);
+      };
+      document.addEventListener("keydown", onKey, true);
+      exportAgentKeydownUnsub = () =>
+        document.removeEventListener("keydown", onKey, true);
+    }
+  } else {
+    exportAgentOutsideClickUnsub?.();
+    exportAgentOutsideClickUnsub = null;
+    exportAgentKeydownUnsub?.();
+    exportAgentKeydownUnsub = null;
+  }
+}
+
+function setAvailableExportAgents(agents: unknown): void {
+  const input = Array.isArray(agents) ? agents : [];
+  const map = new Map<string, string>();
+  for (const a of input) {
+    const name = String(a ?? "").trim();
+    if (!name) continue;
+    const key = normalizeAgentKey(name);
+    if (!key || map.has(key)) continue;
+    map.set(key, name);
+  }
+  exportAgentOptions = Array.from(map.entries())
+    .map(([key, name]) => ({ key, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const availableKeys = new Set(exportAgentOptions.map((o) => o.key));
+  exportAgentSelectedKeys = new Set(
+    Array.from(exportAgentSelectedKeys).filter((k) => availableKeys.has(k)),
+  );
+
+  updateExportAgentUi();
+  renderExportAgentList();
+}
+
+function getExportFilters(): ExportFilters {
+  const importer = String(els.exportFilterImporter?.value ?? "").trim();
+  const agent = getSelectedExportAgents();
+  const dzial = String(els.exportFilterDzial?.value ?? "").trim();
+
+  const out: ExportFilters = {};
+  if (importer) out.importer = importer;
+  if (agent.length) out.agent = agent;
+  if (dzial) out.dzial = dzial;
+  return out;
+}
+
+function updateExportFiltersUi(): void {
+  const f = getExportFilters();
+  const any = Boolean(f.importer || (f.agent && f.agent.length) || f.dzial);
+  els.btnExportFiltersClear.disabled = !any;
+}
+
+function clearExportFilters(): void {
+  els.exportFilterImporter.value = "";
+  exportAgentSelectedKeys.clear();
+  els.exportFilterDzial.value = "";
+  updateExportAgentUi();
+  updateExportFiltersUi();
 }
 
 function formatPct(pct: number | null): string {
@@ -932,8 +1204,8 @@ async function refreshValidationDashboardCounts() {
 }
 
 async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
-  const keyEncoded = detailsEl.dataset.key ?? "";
   const period = getValidationPeriodValue();
+  const keyEncoded = detailsEl.dataset.key ?? "";
   if (!keyEncoded || !period) return;
   if (detailsEl.dataset.loaded === "1") return;
   if (detailsEl.dataset.loading === "1") return;
@@ -1185,6 +1457,17 @@ async function ensureValidationDefaults() {
   }
 }
 
+async function ensureExportDefaults() {
+  if (els.exportMonth.value && els.exportYear.value) return;
+  try {
+    const res = await window.api.getValidationDefaultMonth();
+    if (res.month && !els.exportMonth.value) els.exportMonth.value = res.month;
+    if (res.month && !els.exportYear.value) els.exportYear.value = String(res.month).slice(0, 4);
+  } catch {
+    // ignore
+  }
+}
+
 async function refreshValidation() {
   setStatus(els.validationStatus, "");
   updateValidationPeriodUi();
@@ -1370,6 +1653,131 @@ async function refreshValidation() {
   }
 }
 
+function renderPreviewTable(rows: Array<Record<string, unknown>>): string {
+  if (!rows.length) return `<div class="muted">Brak danych.</div>`;
+  const cols = Object.keys(rows[0] ?? {});
+  const thead = `<tr>${cols.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr>`;
+  const body = rows
+    .map((r) => {
+      const tds = cols
+        .map((c) => {
+          const v = (r as Record<string, unknown>)[c];
+          const text = v == null ? "" : String(v);
+          return `<td title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
+        })
+        .join("");
+      return `<tr>${tds}</tr>`;
+    })
+    .join("");
+
+  return `
+    <div class="table-wrap" style="height:auto; max-height: 360px;">
+      <table class="table table-sm table-dark table-hover mini-table" style="margin:0">
+        <thead>${thead}</thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function refreshExportPreview() {
+  setStatus(els.exportStatus, "");
+  updateExportPeriodUi();
+  updateExportFiltersUi();
+  await ensureExportDefaults();
+  const period = getExportPeriodValue();
+  if (!period) {
+    setStatus(els.exportStatus, "Wybierz miesi?c lub rok.");
+    return;
+  }
+
+  const mrn = getExportMrnFilterValue() || undefined;
+  els.exportMeta.innerHTML = "";
+  els.exportPreview.innerHTML = "";
+  setStatus(els.exportStatus, "?adowanie podgl?du...");
+  setBusy(true);
+
+  try {
+    const res = await window.api.previewValidationExport(
+      period,
+      mrn,
+      getExportGroupingOptions(),
+      getExportFilters(),
+    );
+
+    if (!res?.ok) {
+      const msg = String(res?.error ?? "unknown");
+      setStatus(els.exportStatus, `B??d: ${msg}`);
+      return;
+    }
+
+    const p = res.preview;
+    setAvailableExportAgents(p.availableAgents);
+    const sheetHtml = (p.sheets ?? [])
+      .map((s) => {
+        const sectionsHtml = (s.sections ?? [])
+          .map((sec) => {
+            const meta =
+              sec.truncated && sec.totalRows
+                ? `<div class="muted" style="margin-top:6px">Pokazano ${sec.rows.length} z ${sec.totalRows} wierszy.</div>`
+                : "";
+            return `
+              <div class="section-title">${escapeHtml(sec.title)}</div>
+              ${meta}
+              ${renderPreviewTable(sec.rows ?? [])}
+            `;
+          })
+          .join("");
+
+        return `
+          <details class="accordion export-sheet" open>
+            <summary>
+              <span class="mrn-code">${escapeHtml(s.name)}</span>
+            </summary>
+            <div class="accordion-body">${sectionsHtml}</div>
+          </details>
+        `;
+      })
+      .join("");
+
+    const metaRows = (p.meta ?? []).map((kv) => ({
+      Key: kv.key,
+      Value: kv.value,
+    }));
+    const metaHtml = `
+      <details class="accordion export-sheet">
+        <summary><span class="mrn-code">Meta</span></summary>
+        <div class="accordion-body">${renderPreviewTable(metaRows)}</div>
+      </details>
+    `;
+
+    els.exportPreview.innerHTML = `${metaHtml}${sheetHtml}`;
+    const groupingLabel =
+      Array.from(els.exportGrouping.options).find(
+        (o) => String(o.value) === String(p.grouping ?? ""),
+      )?.textContent ?? String(p.grouping ?? "");
+    const agents = getSelectedExportAgents();
+    const agentLabel =
+      agents.length === 0
+        ? "wszyscy"
+        : agents.length === 1
+          ? agents[0]
+          : `${agents.length} wybranych`;
+    els.exportMeta.innerHTML = `
+      <div class="meta-lines">
+        <div><span class="muted">Okres:</span> <span class="mono">${escapeHtml(p.period)}</span></div>
+        <div><span class="muted">Zakres:</span> <span class="mono">${escapeHtml(p.range.start)}?${escapeHtml(p.range.end)}</span></div>
+        <div><span class="muted">IQR:</span> ${escapeHtml(String(groupingLabel).trim())} <span class="muted">? Agent:</span> ${escapeHtml(agentLabel)}</div>
+      </div>
+    `;
+    setStatus(els.exportStatus, "");
+  } catch (e: unknown) {
+    setStatus(els.exportStatus, `B??d: ${errorMessage(e)}`);
+  } finally {
+    setBusy(false);
+  }
+}
+
 async function importRaport() {
   els.importBtn.disabled = true;
   setStatus(els.importStatus, "Importowanie…");
@@ -1438,6 +1846,7 @@ els.tabImportBtn.addEventListener("click", () => setTab("import"));
 els.tabPreviewBtn.addEventListener("click", () => setTab("preview"));
 els.tabDashboardBtn.addEventListener("click", () => setTab("dashboard"));
 els.tabValidationBtn.addEventListener("click", () => setTab("validation"));
+els.tabExportBtn.addEventListener("click", () => setTab("export"));
 els.tabSettingsBtn.addEventListener("click", () => setTab("settings"));
 
 els.importBtn.addEventListener("click", () => void importRaport());
@@ -1464,6 +1873,28 @@ els.btnShowDb.addEventListener(
 );
 els.btnClear.addEventListener("click", () => void clearData());
 
+els.btnAgentDzialShow.addEventListener(
+  "click",
+  () => void window.api.showAgentDzialInFolder().catch(() => {}),
+);
+els.btnAgentDzialClear.addEventListener("click", async () => {
+  const ok = window.confirm("Zresetować słownik agentów (Agent->Dział) do pustego JSON?");
+  if (!ok) return;
+  els.btnAgentDzialClear.disabled = true;
+  setStatus(els.agentDzialStatus, "Resetowanie słownika…");
+  setBusy(true);
+  try {
+    await window.api.clearAgentDzialMap();
+    setStatus(els.agentDzialStatus, "OK: słownik zresetowany.");
+    await refreshAgentDzialUi();
+  } catch (e: unknown) {
+    setStatus(els.agentDzialStatus, `Błąd: ${errorMessage(e)}`);
+  } finally {
+    setBusy(false);
+    els.btnAgentDzialClear.disabled = false;
+  }
+});
+
 els.btnMrnRefresh.addEventListener("click", () => void refreshDashboard());
 els.btnMrnRebuild.addEventListener("click", async () => {
   els.btnMrnRebuild.disabled = true;
@@ -1485,10 +1916,10 @@ els.btnValidationRefresh.addEventListener(
   "click",
   () => void refreshValidation(),
 );
-els.btnValidationExport.addEventListener("click", async () => {
+/*
   const period = getValidationPeriodValue();
   if (!period) {
-    setStatus(els.validationStatus, "Wybierz miesiД…c lub rok.");
+    setStatus(els.validationStatus, "Wybierz miesi?c lub rok.");
     return;
   }
 
@@ -1497,10 +1928,12 @@ els.btnValidationExport.addEventListener("click", async () => {
   setBusy(true);
   try {
     const mrn = getValidationMrnFilterValue() || undefined;
+    const filters = getValidationExportFilters();
     const res = await window.api.exportValidationXlsx(
       period,
       mrn,
       getValidationGroupingOptions(),
+      filters,
     );
     if (res?.ok) {
       const fp = res.filePath ? ` ${res.filePath}` : "";
@@ -1510,16 +1943,17 @@ els.btnValidationExport.addEventListener("click", async () => {
     } else {
       setStatus(
         els.validationStatus,
-        `BЕ‚Д…d eksportu: ${String(res?.error ?? "unknown")}`,
+        `B??d eksportu: ${String(res?.error ?? "unknown")}`,
       );
     }
   } catch (e: unknown) {
-    setStatus(els.validationStatus, `BЕ‚Д…d eksportu: ${errorMessage(e)}`);
+    setStatus(els.validationStatus, `B??d eksportu: ${errorMessage(e)}`);
   } finally {
     els.btnValidationExport.disabled = false;
     setBusy(false);
   }
 });
+*/
 els.validationPeriod.addEventListener("change", () => {
   updateValidationPeriodUi();
   void refreshValidation();
@@ -1569,6 +2003,137 @@ els.validationMrnFilter.addEventListener("input", () => {
 els.btnValidationMrnClear.addEventListener("click", () => {
   setValidationMrnFilterValue("");
   void refreshValidation();
+});
+
+let exportPreviewDebounce: number | null = null;
+const scheduleExportPreviewRefresh = () => {
+  if (exportPreviewDebounce != null) window.clearTimeout(exportPreviewDebounce);
+  exportPreviewDebounce = window.setTimeout(() => {
+    exportPreviewDebounce = null;
+    if (state.tab === "export") void refreshExportPreview();
+  }, 280);
+};
+
+els.btnExportRefresh.addEventListener("click", () => void refreshExportPreview());
+els.btnExportDo.addEventListener("click", async () => {
+  setStatus(els.exportStatus, "");
+  updateExportPeriodUi();
+  await ensureExportDefaults();
+  const period = getExportPeriodValue();
+  if (!period) {
+    setStatus(els.exportStatus, "Wybierz miesi?c lub rok.");
+    return;
+  }
+
+  els.btnExportDo.disabled = true;
+  setStatus(els.exportStatus, "Eksportowanie do Excel...");
+  setBusy(true);
+  try {
+    const mrn = getExportMrnFilterValue() || undefined;
+    const res = await window.api.exportValidationXlsx(
+      period,
+      mrn,
+      getExportGroupingOptions(),
+      getExportFilters(),
+    );
+    if (res?.ok) {
+      const fp = res.filePath ? ` ${res.filePath}` : "";
+      setStatus(els.exportStatus, `Zapisano.${fp}`);
+    } else if (res?.canceled) {
+      setStatus(els.exportStatus, "Anulowano.");
+    } else {
+      setStatus(
+        els.exportStatus,
+        `B??d eksportu: ${String(res?.error ?? "unknown")}`,
+      );
+    }
+  } catch (e: unknown) {
+    setStatus(els.exportStatus, `B??d eksportu: ${errorMessage(e)}`);
+  } finally {
+    els.btnExportDo.disabled = false;
+    setBusy(false);
+  }
+});
+
+els.exportPeriod.addEventListener("change", () => {
+  updateExportPeriodUi();
+  scheduleExportPreviewRefresh();
+});
+els.exportMonth.addEventListener("change", () => scheduleExportPreviewRefresh());
+els.exportYear.addEventListener("change", () => scheduleExportPreviewRefresh());
+
+try {
+  const savedGrouping = localStorage.getItem(EXPORT_GROUPING_STORAGE_KEY);
+  if (savedGrouping) {
+    els.exportGrouping.value = normalizeValidationDateGrouping(savedGrouping);
+  }
+} catch {
+  // ignore
+}
+els.exportGrouping.addEventListener("change", () => {
+  const v = normalizeValidationDateGrouping(els.exportGrouping.value);
+  setExportGroupingValue(v);
+  scheduleExportPreviewRefresh();
+});
+
+try {
+  const saved = localStorage.getItem(EXPORT_MRN_FILTER_STORAGE_KEY) ?? "";
+  if (!els.exportMrnFilter.value) els.exportMrnFilter.value = saved;
+} catch {
+  // ignore
+}
+
+let exportMrnDebounce: number | null = null;
+els.exportMrnFilter.addEventListener("input", () => {
+  const v = getExportMrnFilterValue();
+  try {
+    localStorage.setItem(EXPORT_MRN_FILTER_STORAGE_KEY, v);
+  } catch {
+    // ignore
+  }
+  if (exportMrnDebounce != null) window.clearTimeout(exportMrnDebounce);
+  exportMrnDebounce = window.setTimeout(() => {
+    exportMrnDebounce = null;
+    scheduleExportPreviewRefresh();
+  }, 280);
+});
+
+updateExportFiltersUi();
+els.exportFilterImporter.addEventListener("input", () => {
+  updateExportFiltersUi();
+  scheduleExportPreviewRefresh();
+});
+els.exportAgentBtn.addEventListener("click", () => {
+  if (els.exportAgentBtn.disabled) return;
+  const open = els.exportAgentPopover.classList.contains("hidden");
+  setExportAgentPopoverOpen(open);
+});
+els.exportAgentSearch.addEventListener("input", () => renderExportAgentList());
+els.btnExportAgentClear.addEventListener("click", () => {
+  exportAgentSelectedKeys.clear();
+  updateExportAgentUi();
+  renderExportAgentList();
+  updateExportFiltersUi();
+  scheduleExportPreviewRefresh();
+});
+els.exportAgentList.addEventListener("change", (e) => {
+  const target = e.target as HTMLInputElement | null;
+  if (!target || target.tagName !== "INPUT" || target.type !== "checkbox") return;
+  const key = String(target.dataset.key ?? "").trim();
+  if (!key) return;
+  if (target.checked) exportAgentSelectedKeys.add(key);
+  else exportAgentSelectedKeys.delete(key);
+  updateExportAgentUi();
+  updateExportFiltersUi();
+  scheduleExportPreviewRefresh();
+});
+els.exportFilterDzial.addEventListener("input", () => {
+  updateExportFiltersUi();
+  scheduleExportPreviewRefresh();
+});
+els.btnExportFiltersClear.addEventListener("click", () => {
+  clearExportFilters();
+  scheduleExportPreviewRefresh();
 });
 
 if (!updateStatusUnsub) {

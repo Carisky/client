@@ -90,6 +90,12 @@ export type ValidationDateGrouping = 'day' | 'days2' | 'days3' | 'week' | 'month
 
 export type ValidationGroupingOptions = { grouping?: ValidationDateGrouping };
 
+export type ValidationExportFilters = {
+  importer?: string;
+  agent?: string[];
+  dzial?: string;
+};
+
 export type ValidationDayItems = {
   date: string;
   totals: { all: number; outliersHigh: number; outliersLow: number; singles: number; verifiedManual: number };
@@ -133,6 +139,37 @@ export type ValidationExportResult = {
   error?: string;
 };
 
+export type ValidationExportPreview = {
+  period: string;
+  grouping: string;
+  range: { start: string; end: string };
+  availableAgents: string[];
+  meta: Array<{ key: string; value: string }>;
+  sheets: Array<{
+    name: string;
+    sections: Array<{
+      title: string;
+      rows: Array<Record<string, unknown>>;
+      totalRows: number;
+      truncated: boolean;
+    }>;
+  }>;
+};
+
+export type ValidationExportPreviewResult = {
+  ok: boolean;
+  preview?: ValidationExportPreview;
+  error?: string;
+};
+
+export type AgentDzialInfo = {
+  filePath: string;
+  exists: boolean;
+  rowCount: number;
+  modifiedAt: string | null;
+  error?: string;
+};
+
 export type UpdateCheckResult = {
   supported: boolean;
   updateAvailable: boolean;
@@ -170,6 +207,10 @@ contextBridge.exposeInMainWorld('api', {
   getDbInfo: (): Promise<DbInfo> => ipcRenderer.invoke('raport:dbInfo'),
   showDbInFolder: (): Promise<boolean> => ipcRenderer.invoke('raport:showDbInFolder'),
 
+  getAgentDzialInfo: (): Promise<AgentDzialInfo> => ipcRenderer.invoke('agentDzial:info'),
+  clearAgentDzialMap: (): Promise<AgentDzialInfo> => ipcRenderer.invoke('agentDzial:clear'),
+  showAgentDzialInFolder: (): Promise<boolean> => ipcRenderer.invoke('agentDzial:showInFolder'),
+
   rebuildMrnBatch: (): Promise<{ rowsInserted: number; groups: number; scannedAt: string | null }> =>
     ipcRenderer.invoke('mrnBatch:rebuild'),
   getMrnBatchMeta: (): Promise<MrnBatchMeta> => ipcRenderer.invoke('mrnBatch:meta'),
@@ -189,8 +230,19 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('validation:outlierErrors', { month, mrn, grouping: options?.grouping }),
   setValidationManualVerified: (rowId: number, verified: boolean): Promise<{ ok: true }> =>
     ipcRenderer.invoke('validation:setManualVerified', { rowId, verified }),
-  exportValidationXlsx: (period: string, mrn?: string, options?: ValidationGroupingOptions): Promise<ValidationExportResult> =>
-    ipcRenderer.invoke('validation:exportXlsx', { period, mrn, grouping: options?.grouping }),
+  exportValidationXlsx: (
+    period: string,
+    mrn?: string,
+    options?: ValidationGroupingOptions,
+    filters?: ValidationExportFilters,
+  ): Promise<ValidationExportResult> => ipcRenderer.invoke('validation:exportXlsx', { period, mrn, grouping: options?.grouping, filters }),
+  previewValidationExport: (
+    period: string,
+    mrn?: string,
+    options?: ValidationGroupingOptions,
+    filters?: ValidationExportFilters,
+  ): Promise<ValidationExportPreviewResult> =>
+    ipcRenderer.invoke('validation:exportPreview', { period, mrn, grouping: options?.grouping, filters }),
 
   getAppVersion: (): Promise<{ version: string }> => ipcRenderer.invoke('app:version'),
   checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),

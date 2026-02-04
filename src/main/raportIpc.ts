@@ -1,8 +1,10 @@
 import { app, dialog, ipcMain, shell } from 'electron';
 import * as path from 'path';
 import {
+  clearAgentDzialMap,
   clearRaportData,
   exportValidationWynikiToXlsx,
+  getAgentDzialInfo,
   getDbInfo,
   getMrnBatchGroups,
   getMrnBatchMeta,
@@ -16,6 +18,7 @@ import {
   getValidationItems,
   getValidationOutlierErrors,
   importRaportFromXlsx,
+  previewValidationWynikiExport,
   rebuildMrnBatch,
   setValidationManualVerified,
 } from './raportDb';
@@ -57,6 +60,14 @@ export function registerRaportIpc(): void {
     return true;
   });
 
+  ipcMain.handle('agentDzial:info', async () => getAgentDzialInfo());
+  ipcMain.handle('agentDzial:clear', async () => clearAgentDzialMap());
+  ipcMain.handle('agentDzial:showInFolder', async () => {
+    const info = await getAgentDzialInfo();
+    shell.showItemInFolder(info.filePath);
+    return true;
+  });
+
   ipcMain.handle('mrnBatch:rebuild', async () => rebuildMrnBatch());
   ipcMain.handle('mrnBatch:meta', async () => getMrnBatchMeta());
   ipcMain.handle('mrnBatch:groups', async (_evt, args?: { limit?: number }) => getMrnBatchGroups({ limit: args?.limit }));
@@ -88,10 +99,27 @@ export function registerRaportIpc(): void {
   ipcMain.handle('validation:setManualVerified', async (_evt, args: { rowId: number; verified: boolean }) =>
     setValidationManualVerified({ rowId: args?.rowId, verified: Boolean(args?.verified) }),
   );
-  ipcMain.handle('validation:exportXlsx', async (_evt, args: { period: string; mrn?: string; grouping?: unknown }) => {
+  ipcMain.handle(
+    'validation:exportXlsx',
+    async (
+      _evt,
+      args: {
+        period: string;
+        mrn?: string;
+        grouping?: unknown;
+        filters?: { importer?: unknown; agent?: unknown; dzial?: unknown };
+      },
+    ) => {
     const period = String(args?.period ?? '').trim();
     const grouping = String(args?.grouping ?? 'day').trim();
     const mrn = String(args?.mrn ?? '').trim();
+    const f = args?.filters ?? {};
+    const importer = String(f?.importer ?? '').trim();
+    const dzial = String(f?.dzial ?? '').trim();
+    const agentRaw = f?.agent;
+    const agents = (Array.isArray(agentRaw) ? agentRaw : typeof agentRaw === 'string' ? [agentRaw] : [])
+      .map((v) => String(v ?? '').trim())
+      .filter(Boolean);
 
     const safePart = (v: string) =>
       v
@@ -100,7 +128,13 @@ export function registerRaportIpc(): void {
         .trim()
         .slice(0, 80);
 
-    const fileName = `Wyniki_${safePart(period || 'okres')}_${safePart(grouping || 'day')}${mrn ? `_MRN_${safePart(mrn)}` : ''}.xlsx`;
+    const parts = [`Wyniki_${safePart(period || 'okres')}_${safePart(grouping || 'day')}`];
+    if (mrn) parts.push(`MRN_${safePart(mrn)}`);
+    if (importer) parts.push(`Importer_${safePart(importer)}`);
+    if (agents.length === 1) parts.push(`Agent_${safePart(agents[0] ?? '')}`);
+    else if (agents.length > 1) parts.push(`Agents_${agents.length}`);
+    if (dzial) parts.push(`Dzial_${safePart(dzial)}`);
+    const fileName = `${parts.join('_')}.xlsx`.slice(0, 200);
     const defaultPath = path.join(app.getPath('downloads'), fileName);
 
     const res = await dialog.showSaveDialog({
@@ -115,13 +149,59 @@ export function registerRaportIpc(): void {
         period,
         mrn: mrn || undefined,
         grouping: args?.grouping,
+        filters: {
+          importer: importer || undefined,
+          agent: agents.length ? agents : undefined,
+          dzial: dzial || undefined,
+        },
         filePath: res.filePath,
       });
       return { ok: true, filePath: res.filePath };
     } catch (e: unknown) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
-  });
+    },
+  );
+
+  ipcMain.handle(
+    'validation:exportPreview',
+    async (
+      _evt,
+      args: {
+        period: string;
+        mrn?: string;
+        grouping?: unknown;
+        filters?: { importer?: unknown; agent?: unknown; dzial?: unknown };
+      },
+    ) => {
+      const period = String(args?.period ?? '').trim();
+      const mrn = String(args?.mrn ?? '').trim();
+      const f = args?.filters ?? {};
+      const importer = String(f?.importer ?? '').trim();
+      const dzial = String(f?.dzial ?? '').trim();
+      const agentRaw = f?.agent;
+      const agents = (Array.isArray(agentRaw) ? agentRaw : typeof agentRaw === 'string' ? [agentRaw] : [])
+        .map((v) => String(v ?? '').trim())
+        .filter(Boolean);
+
+      try {
+        const preview = await previewValidationWynikiExport({
+          period,
+          mrn: mrn || undefined,
+          grouping: args?.grouping,
+          filters: {
+            importer: importer || undefined,
+            agent: agents.length ? agents : undefined,
+            dzial: dzial || undefined,
+          },
+          limit: 200,
+        });
+        return { ok: true, preview };
+      } catch (e: unknown) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  );
 
   ipcMain.handle('app:version', async () => ({ version: app.getVersion() }));
   ipcMain.handle('updates:check', async () => checkForUpdates());
