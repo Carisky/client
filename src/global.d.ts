@@ -64,6 +64,8 @@ declare global {
         filters?: ValidationExportFilters,
       ) => Promise<ValidationExportPreviewResult>;
 
+      writeClipboardText: (text: string) => Promise<{ ok: boolean; error?: string }>;
+
       getAppVersion: () => Promise<{ version: string }>;
       checkForUpdates: () => Promise<UpdateCheckResult>;
       onUpdateStatus: (handler: (s: UpdateStatus) => void) => () => void;

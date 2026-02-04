@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, shell } from 'electron';
+import { app, clipboard, dialog, ipcMain, shell } from 'electron';
 import * as path from 'path';
 import {
   clearAgentDzialMap,
@@ -66,6 +66,16 @@ export function registerRaportIpc(): void {
     const info = await getAgentDzialInfo();
     shell.showItemInFolder(info.filePath);
     return true;
+  });
+
+  ipcMain.handle('clipboard:writeText', async (_evt, args: { text: string }) => {
+    try {
+      const text = String(args?.text ?? '');
+      clipboard.writeText(text);
+      return { ok: true as const };
+    } catch (e: unknown) {
+      return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+    }
   });
 
   ipcMain.handle('mrnBatch:rebuild', async () => rebuildMrnBatch());

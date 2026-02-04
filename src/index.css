@@ -663,6 +663,56 @@ details.accordion[open] > summary {
   white-space: nowrap;
 }
 
+.copyable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(var(--bs-primary-rgb), 0.55);
+  text-underline-offset: 2px;
+}
+
+.copyable:hover {
+  text-decoration-color: rgba(var(--bs-primary-rgb), 0.9);
+}
+
+.copyable:focus {
+  outline: 2px solid rgba(var(--bs-primary-rgb), 0.55);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.pill.copyable {
+  text-decoration: none;
+}
+
+.pill.copyable:hover {
+  border-color: rgba(var(--bs-primary-rgb), 0.45);
+  background: rgba(var(--bs-primary-rgb), 0.12);
+  color: var(--text);
+}
+
+.copy-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(var(--bs-primary-rgb), 0.38);
+  background: rgba(var(--panel-rgb), 0.92);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  font-size: 12px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  pointer-events: none;
+}
+
+.copy-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .badge-count {
   border: 1px solid rgba(var(--bs-primary-rgb), 0.42);
   background: rgba(var(--bs-primary-rgb), 0.16);

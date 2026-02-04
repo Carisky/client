@@ -473,6 +473,118 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
+type CopyKind = "mrn" | "sad";
+
+function copyLabel(kind: CopyKind): string {
+  return kind === "sad" ? "Nr SAD" : "MRN";
+}
+
+function renderCopyableText(
+  value: string | null | undefined,
+  kind: CopyKind,
+  className = "",
+): string {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const encoded = encodeURIComponent(text);
+  const label = copyLabel(kind);
+  const cls = ["copyable", className].filter(Boolean).join(" ");
+  return `<span class="${cls}" role="button" tabindex="0" data-copy="${encoded}" title="${escapeHtml(text)}" aria-label="Skopiuj ${escapeHtml(label)}">${escapeHtml(text)}</span>`;
+}
+
+async function copyToClipboard(textRaw: string): Promise<boolean> {
+  const text = String(textRaw ?? "").trim();
+  if (!text) return false;
+
+  try {
+    const res = await window.api.writeClipboardText(text);
+    if (res?.ok) return true;
+    throw new Error(String(res?.error ?? "unknown"));
+  } catch {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return false;
+}
+
+let copyToastTimer: number | null = null;
+function showCopyToast(message = "Skopiowano"): void {
+  let el = document.getElementById("copy-toast") as HTMLDivElement | null;
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "copy-toast";
+    el.className = "copy-toast";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    document.body.appendChild(el);
+  }
+
+  el.textContent = message;
+  el.classList.add("show");
+  if (copyToastTimer != null) window.clearTimeout(copyToastTimer);
+  copyToastTimer = window.setTimeout(() => {
+    copyToastTimer = null;
+    el?.classList.remove("show");
+  }, 900);
+}
+
+function setupCopyToClipboard(): void {
+  document.addEventListener(
+    "click",
+    async (e) => {
+      const target = e.target as HTMLElement | null;
+      const el = target?.closest?.("[data-copy]") as HTMLElement | null;
+      if (!el) return;
+
+      const raw = String(el.dataset.copy ?? "");
+      if (!raw) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      let text = raw;
+      try {
+        text = decodeURIComponent(raw);
+      } catch {
+      // ignore
+    }
+
+      const ok = await copyToClipboard(text);
+      if (ok) showCopyToast();
+    },
+    { capture: true },
+  );
+
+  document.addEventListener("keydown", async (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const target = e.target as HTMLElement | null;
+    const el = target?.closest?.("[data-copy]") as HTMLElement | null;
+    if (!el) return;
+
+    const raw = String(el.dataset.copy ?? "");
+    if (!raw) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    let text = raw;
+    try {
+      text = decodeURIComponent(raw);
+    } catch {
+      // ignore
+    }
+
+    const ok = await copyToClipboard(text);
+    if (ok) showCopyToast();
+  });
+}
+
 function renderTable(page: {
   columns: Array<{ field: string; label: string }>;
   rows: Array<Record<string, string | null>>;
@@ -487,7 +599,13 @@ function renderTable(page: {
         .map((c) => {
           const v = row[c.field];
           const text = v == null ? "" : String(v);
-          return `<td title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
+          const content =
+            c.field === "nr_sad"
+              ? renderCopyableText(text, "sad", "mono")
+              : c.field === "numer_mrn"
+                ? renderCopyableText(text, "mrn", "mono")
+                : escapeHtml(text);
+          return `<td title="${escapeHtml(text)}">${content}</td>`;
         })
         .join("");
       return `<tr>${tds}</tr>`;
@@ -647,6 +765,22 @@ function renderPills(values: string[], emptyText = "-") {
     .join("")}${rest > 0 ? `<span class="pill">+${rest}</span>` : ""}</div>`;
 }
 
+function renderCopyPills(values: string[], kind: CopyKind, emptyText = "-") {
+  if (values.length === 0)
+    return `<div class="pills"><span class="pill">${escapeHtml(emptyText)}</span></div>`;
+  const slice = values.slice(0, 30);
+  const rest = values.length - slice.length;
+  const label = copyLabel(kind);
+  return `<div class="pills">${slice
+    .map((v) => {
+      const text = String(v ?? "").trim();
+      if (!text) return "";
+      const encoded = encodeURIComponent(text);
+      return `<span class="pill copyable" role="button" tabindex="0" data-copy="${encoded}" title="${escapeHtml(text)}" aria-label="Skopiuj ${escapeHtml(label)}">${escapeHtml(text)}</span>`;
+    })
+    .join("")}${rest > 0 ? `<span class="pill">+${rest}</span>` : ""}</div>`;
+}
+
 const ROW_DETAIL_KEYS: ReadonlyArray<string> = [
   "id",
   "rowNumber",
@@ -704,7 +838,8 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
         : rows
             .map((row) => {
               const rowNumber = row.rowNumber ? String(row.rowNumber) : "-";
-              const nr = row.nr_sad ? String(row.nr_sad) : "-";
+              const nrRaw = row.nr_sad ? String(row.nr_sad) : "";
+              const nr = nrRaw || "-";
               const dt = row.data_mrn ? String(row.data_mrn) : "-";
               const st = row.stan ? String(row.stan) : "-";
 
@@ -713,7 +848,7 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
                   <summary>
                     <div class="row-summary">
                       <div class="muted" title="rowNumber">${escapeHtml(rowNumber)}</div>
-                      <div class="muted" title="nr_sad">${escapeHtml(nr)}</div>
+                      <div class="muted" title="nr_sad">${nrRaw ? renderCopyableText(nrRaw, "sad") : escapeHtml(nr)}</div>
                       <div class="muted" title="data_mrn">${escapeHtml(dt)}</div>
                       <div class="muted" title="stan">${escapeHtml(st)}</div>
                     </div>
@@ -726,7 +861,7 @@ async function loadMrnGroupDetails(detailsEl: HTMLDetailsElement) {
 
     body.innerHTML = `
       <div class="muted">Nr SAD</div>
-      ${renderPills(nrSad)}
+      ${renderCopyPills(nrSad, "sad")}
       <div class="muted">Data MRN</div>
       ${renderPills(dataMrn)}
       ${rowsHtml}
@@ -765,7 +900,7 @@ async function refreshDashboard() {
         (g) => `
           <details class="accordion" data-mrn="${escapeHtml(g.numer_mrn)}">
             <summary>
-              <span class="mrn-code" title="${escapeHtml(g.numer_mrn)}">${escapeHtml(g.numer_mrn)}</span>
+              ${renderCopyableText(g.numer_mrn, "mrn", "mrn-code")}
               <span class="badge rounded-pill badge-count">${g.count}</span>
             </summary>
             <div class="accordion-body">
@@ -1545,7 +1680,7 @@ function renderValidationErrorsByAgent(items: ValidationOutlierError[]): string 
           ].filter(Boolean);
           const opis = opisParts.join(" • ");
           return `<tr class="outlier">
-            <td class="mono">${escapeHtml(e.numer_mrn ?? "-")}</td>
+             <td class="mono">${renderCopyableText(e.numer_mrn, "mrn") || escapeHtml(e.numer_mrn ?? "-")}</td>
             <td title="${escapeHtml(opis)}">${escapeHtml(groupTitle || "-")}</td>
             <td class="mono" title="${escapeHtml(opis)}">${arrow}<span style="margin-left:6px;">${escapeHtml(formatPct(e.discrepancyPct))}</span></td>
             <td>${escapeHtml(agent)}</td>
@@ -1624,8 +1759,8 @@ function renderAttentionItemsByAgent(items: ValidationOutlierError[]): string {
           const opis = opisParts.join(" • ");
           return `<tr class="outlier">
             <td class="mono">${escapeHtml(e.data_mrn ?? "-")}</td>
-            <td class="mono">${escapeHtml(e.nr_sad ?? "-")}</td>
-            <td class="mono">${escapeHtml(e.numer_mrn ?? "-")}</td>
+             <td class="mono">${renderCopyableText(e.nr_sad, "sad") || escapeHtml(e.nr_sad ?? "-")}</td>
+             <td class="mono">${renderCopyableText(e.numer_mrn, "mrn") || escapeHtml(e.numer_mrn ?? "-")}</td>
             <td class="mono" title="${escapeHtml(opis)}">${arrow}<span style="margin-left:6px;">${escapeHtml(formatPct(e.discrepancyPct))}</span></td>
           </tr>`;
         })
@@ -1804,7 +1939,7 @@ async function loadValidationGroupDetails(detailsEl: HTMLDetailsElement) {
                   return `<tr${rowClass}>
                     <td class="mono">${escapeHtml(it.data_mrn ?? "-")}</td>
                     <td title="${escapeHtml(it.odbiorca ?? "")}">${escapeHtml(it.odbiorca ?? "-")}</td>
-                    <td class="mono">${escapeHtml(it.numer_mrn ?? "-")}</td>
+                    <td class="mono">${renderCopyableText(it.numer_mrn, "mrn") || escapeHtml(it.numer_mrn ?? "-")}</td>
                     <td class="mono coef-cell coef-col"><span class="coef-value">${escapeHtml(coef)}</span><span class="coef-meta">${singleTag}${arrow}</span></td>
                     <td class="mono manual-col">
                       <input class="manual-verify" type="checkbox" data-rowid="${escapeHtml(String(it.rowId ?? ""))}"${checkedAttr}${disabledAttr} />
@@ -1923,7 +2058,7 @@ async function loadValidationDayDetails(detailsEl: HTMLDetailsElement) {
                   return `<tr${rowClass}>
                     <td class="mono">${escapeHtml(it.data_mrn ?? "-")}</td>
                     <td title="${escapeHtml(groupTitle)}">${escapeHtml(groupTitle)}</td>
-                    <td class="mono">${escapeHtml(it.numer_mrn ?? "-")}</td>
+                    <td class="mono">${renderCopyableText(it.numer_mrn, "mrn") || escapeHtml(it.numer_mrn ?? "-")}</td>
                     <td class="mono coef-cell coef-col"><span class="coef-value">${escapeHtml(coef)}</span><span class="coef-meta">${singleTag}${arrow}</span></td>
                     <td class="mono manual-col">
                       <input class="manual-verify" type="checkbox" data-rowid="${escapeHtml(String(it.rowId ?? ""))}"${checkedAttr}${disabledAttr} />
@@ -2866,6 +3001,8 @@ if (!updateStatusUnsub) {
     renderUpdateStatus(s);
   });
 }
+
+setupCopyToClipboard();
 
 void refreshMeta();
 void checkForUpdatesAndBlock();

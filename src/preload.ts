@@ -245,6 +245,9 @@ contextBridge.exposeInMainWorld('api', {
   ): Promise<ValidationExportPreviewResult> =>
     ipcRenderer.invoke('validation:exportPreview', { period, mrn, grouping: options?.grouping, filters }),
 
+  writeClipboardText: (text: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('clipboard:writeText', { text }),
+
   getAppVersion: (): Promise<{ version: string }> => ipcRenderer.invoke('app:version'),
   checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
   onUpdateStatus: (handler: (s: UpdateStatus) => void): (() => void) => {
