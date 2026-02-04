@@ -379,6 +379,38 @@ function setStatus(el: HTMLElement, text: string) {
   el.textContent = text;
 }
 
+type LoadSummary = { shown: number; high: number; low: number };
+
+let validationRefreshSeq = 0;
+let attentionRefreshSeq = 0;
+let lastValidationSummary: LoadSummary = { shown: 0, high: 0, low: 0 };
+let lastAttentionSummary: LoadSummary = { shown: 0, high: 0, low: 0 };
+
+function formatLoadSummaryText(s: LoadSummary): string {
+  const shown = Number.isFinite(s.shown) ? Math.max(0, Math.trunc(s.shown)) : 0;
+  const high = Number.isFinite(s.high) ? Math.max(0, Math.trunc(s.high)) : 0;
+  const low = Number.isFinite(s.low) ? Math.max(0, Math.trunc(s.low)) : 0;
+  return `Pokazano ${shown} / Błędy: ↑${high} ↓${low}`;
+}
+
+function setStatusWithInlineSpinner(el: HTMLElement, text: string) {
+  el.textContent = "";
+
+  const wrap = document.createElement("span");
+  wrap.className = "status-inline";
+
+  const spinner = document.createElement("span");
+  spinner.className = "inline-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+
+  const t = document.createElement("span");
+  t.textContent = text;
+
+  wrap.appendChild(spinner);
+  wrap.appendChild(t);
+  el.appendChild(wrap);
+}
+
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   try {
@@ -1973,11 +2005,14 @@ async function ensureAttentionDefaults() {
 }
 
 async function refreshValidation() {
+  const mySeq = ++validationRefreshSeq;
+
   setStatus(els.validationStatus, "");
   updateValidationPeriodUi();
   await ensureValidationDefaults();
   const period = getValidationPeriodValue();
   if (!period) {
+    els.btnValidationRefresh.disabled = false;
     setStatus(els.validationStatus, "Wybierz miesiąc lub rok.");
     return;
   }
@@ -1993,9 +2028,11 @@ async function refreshValidation() {
     .map((d) => (d as HTMLDetailsElement).dataset.key ?? "")
     .filter(Boolean);
 
-  setStatus(els.validationStatus, "Ładowanie...");
-  els.validationGroups.innerHTML = "";
-  els.validationMeta.textContent = "";
+  setStatusWithInlineSpinner(
+    els.validationStatus,
+    formatLoadSummaryText(lastValidationSummary),
+  );
+  els.btnValidationRefresh.disabled = true;
   setBusy(true);
 
   try {
@@ -2016,6 +2053,20 @@ async function refreshValidation() {
         getValidationGroupingOptions(),
       ),
     ]);
+
+    if (mySeq !== validationRefreshSeq) return;
+
+    let countHigh = 0;
+    let countLow = 0;
+    for (const it of outliers.items ?? []) {
+      if (it.outlierSide === "high") countHigh += 1;
+      else if (it.outlierSide === "low") countLow += 1;
+    }
+    lastValidationSummary = {
+      shown: (outliers.items ?? []).length,
+      high: countHigh,
+      low: countLow,
+    };
 
     const wynikHtml = renderValidationErrorsByAgent(outliers.items ?? []);
 
@@ -2151,8 +2202,10 @@ async function refreshValidation() {
 
     setStatus(els.validationStatus, "");
   } catch (e: unknown) {
+    if (mySeq !== validationRefreshSeq) return;
     setStatus(els.validationStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
+    if (mySeq === validationRefreshSeq) els.btnValidationRefresh.disabled = false;
     setBusy(false);
   }
 }
@@ -2185,18 +2238,23 @@ function renderPreviewTable(rows: Array<Record<string, unknown>>): string {
 }
 
 async function refreshAttention() {
+  const mySeq = ++attentionRefreshSeq;
+
   setStatus(els.attentionStatus, "");
   updateAttentionPeriodUi();
   await ensureAttentionDefaults();
   const period = getAttentionPeriodValue();
   if (!period) {
+    els.btnAttentionRefresh.disabled = false;
     setStatus(els.attentionStatus, "Wybierz miesiąc lub rok.");
     return;
   }
 
-  els.attentionList.innerHTML = "";
-  els.attentionMeta.textContent = "";
-  setStatus(els.attentionStatus, "Ładowanie...");
+  setStatusWithInlineSpinner(
+    els.attentionStatus,
+    formatLoadSummaryText(lastAttentionSummary),
+  );
+  els.btnAttentionRefresh.disabled = true;
   setBusy(true);
 
   try {
@@ -2205,6 +2263,8 @@ async function refreshAttention() {
       undefined,
       getAttentionGroupingOptions(),
     );
+
+    if (mySeq !== attentionRefreshSeq) return;
 
     setAvailableAttentionAgents(outliers.availableAgents);
 
@@ -2238,6 +2298,12 @@ async function refreshAttention() {
       else if (it.outlierSide === "low") countLow += 1;
     }
 
+    lastAttentionSummary = {
+      shown: filtered.length,
+      high: countHigh,
+      low: countLow,
+    };
+
     els.attentionMeta.innerHTML = `
       <div class="meta-lines">
         <div><span class="muted">Okres:</span> <span class="mono">${escapeHtml(period)}</span></div>
@@ -2250,8 +2316,10 @@ async function refreshAttention() {
     els.attentionList.innerHTML = renderAttentionItemsByAgent(filtered);
     setStatus(els.attentionStatus, "");
   } catch (e: unknown) {
+    if (mySeq !== attentionRefreshSeq) return;
     setStatus(els.attentionStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
+    if (mySeq === attentionRefreshSeq) els.btnAttentionRefresh.disabled = false;
     setBusy(false);
   }
 }

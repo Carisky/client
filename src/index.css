@@ -163,6 +163,22 @@ body.update-required #app {
   animation: spin 0.9s linear infinite;
 }
 
+.status-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(var(--panel-2-rgb), 0.55);
+  border-top-color: rgba(var(--bs-primary-rgb), 0.95);
+  animation: spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+
 .tabs .nav-link.tab:focus-visible,
 .btn:focus-visible {
   outline: none;
