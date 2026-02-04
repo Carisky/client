@@ -2079,14 +2079,14 @@ async function refreshExportPreview() {
   await ensureExportDefaults();
   const period = getExportPeriodValue();
   if (!period) {
-    setStatus(els.exportStatus, "Wybierz miesi?c lub rok.");
+    setStatus(els.exportStatus, "Wybierz miesi\u0105c lub rok.");
     return;
   }
 
   const mrn = getExportMrnFilterValue() || undefined;
   els.exportMeta.innerHTML = "";
   els.exportPreview.innerHTML = "";
-  setStatus(els.exportStatus, "?adowanie podgl?du...");
+  setStatus(els.exportStatus, "\u0141adowanie podgl\u0105du...");
   setBusy(true);
 
   try {
@@ -2099,7 +2099,7 @@ async function refreshExportPreview() {
 
     if (!res?.ok) {
       const msg = String(res?.error ?? "unknown");
-      setStatus(els.exportStatus, `B??d: ${msg}`);
+      setStatus(els.exportStatus, `B\u0142\u0105d: ${msg}`);
       return;
     }
 
@@ -2158,13 +2158,13 @@ async function refreshExportPreview() {
     els.exportMeta.innerHTML = `
       <div class="meta-lines">
         <div><span class="muted">Okres:</span> <span class="mono">${escapeHtml(p.period)}</span></div>
-        <div><span class="muted">Zakres:</span> <span class="mono">${escapeHtml(p.range.start)}?${escapeHtml(p.range.end)}</span></div>
-        <div><span class="muted">IQR:</span> ${escapeHtml(String(groupingLabel).trim())} <span class="muted">? Agent:</span> ${escapeHtml(agentLabel)}</div>
+        <div><span class="muted">Zakres:</span> <span class="mono">${escapeHtml(p.range.start)}&ndash;${escapeHtml(p.range.end)}</span></div>
+        <div><span class="muted">IQR:</span> ${escapeHtml(String(groupingLabel).trim())} <span class="muted">&bull; Agent:</span> ${escapeHtml(agentLabel)}</div>
       </div>
     `;
     setStatus(els.exportStatus, "");
   } catch (e: unknown) {
-    setStatus(els.exportStatus, `B??d: ${errorMessage(e)}`);
+    setStatus(els.exportStatus, `B\u0142\u0105d: ${errorMessage(e)}`);
   } finally {
     setBusy(false);
   }
@@ -2312,7 +2312,7 @@ els.btnValidationRefresh.addEventListener(
 /*
   const period = getValidationPeriodValue();
   if (!period) {
-    setStatus(els.validationStatus, "Wybierz miesi?c lub rok.");
+    setStatus(els.validationStatus, "Wybierz miesi\u0105c lub rok.");
     return;
   }
 
@@ -2336,11 +2336,14 @@ els.btnValidationRefresh.addEventListener(
     } else {
       setStatus(
         els.validationStatus,
-        `B??d eksportu: ${String(res?.error ?? "unknown")}`,
+        `B\u0142\u0105d eksportu: ${String(res?.error ?? "unknown")}`,
       );
     }
   } catch (e: unknown) {
-    setStatus(els.validationStatus, `B??d eksportu: ${errorMessage(e)}`);
+    setStatus(
+      els.validationStatus,
+      `B\u0142\u0105d eksportu: ${errorMessage(e)}`,
+    );
   } finally {
     els.btnValidationExport.disabled = false;
     setBusy(false);
@@ -2489,7 +2492,7 @@ els.btnExportDo.addEventListener("click", async () => {
   await ensureExportDefaults();
   const period = getExportPeriodValue();
   if (!period) {
-    setStatus(els.exportStatus, "Wybierz miesi?c lub rok.");
+    setStatus(els.exportStatus, "Wybierz miesi\u0105c lub rok.");
     return;
   }
 
@@ -2512,11 +2515,11 @@ els.btnExportDo.addEventListener("click", async () => {
     } else {
       setStatus(
         els.exportStatus,
-        `B??d eksportu: ${String(res?.error ?? "unknown")}`,
+        `B\u0142\u0105d eksportu: ${String(res?.error ?? "unknown")}`,
       );
     }
   } catch (e: unknown) {
-    setStatus(els.exportStatus, `B??d eksportu: ${errorMessage(e)}`);
+    setStatus(els.exportStatus, `B\u0142\u0105d eksportu: ${errorMessage(e)}`);
   } finally {
     els.btnExportDo.disabled = false;
     setBusy(false);
