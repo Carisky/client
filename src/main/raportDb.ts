@@ -1543,6 +1543,7 @@ function computeDiscrepancyPct(value: number, limit: number): number | null {
 
 export async function getValidationOutlierErrors(params: { month: string; mrn?: string | null; grouping?: unknown }): Promise<{
   range: { start: string; end: string };
+  availableAgents: string[];
   items: ValidationOutlierError[];
 }> {
   const client = await getPrisma();
@@ -1551,6 +1552,18 @@ export async function getValidationOutlierErrors(params: { month: string; mrn?: 
   const anchor = range.start;
   const rows = await queryValidationRepresentativeRows(client, range);
   const manual = await getValidationManualSet(client);
+
+  const availableAgentMap = new Map<string, string>();
+  for (const r of rows) {
+    const v = String(r.zglaszajacy ?? '').trim();
+    if (!v) continue;
+    const k = normalizeAgentKey(v);
+    if (!k || availableAgentMap.has(k)) continue;
+    availableAgentMap.set(k, v);
+  }
+  const availableAgents = Array.from(availableAgentMap.values()).sort((a, b) =>
+    a.localeCompare(b),
+  );
 
   const computed: Array<
     ValidationComputedItem & {
@@ -1678,7 +1691,7 @@ export async function getValidationOutlierErrors(params: { month: string; mrn?: 
       String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
   );
 
-  return { range, items: outliers };
+  return { range, availableAgents, items: outliers };
 }
 
 type ValidationIqrBounds = {

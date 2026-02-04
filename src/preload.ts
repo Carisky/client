@@ -129,6 +129,7 @@ export type ValidationOutlierError = {
 
 export type ValidationOutlierErrors = {
   range: { start: string; end: string };
+  availableAgents: string[];
   items: ValidationOutlierError[];
 };
 

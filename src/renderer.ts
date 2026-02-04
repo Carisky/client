@@ -2,7 +2,14 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "./index.css";
 import { RAPORT_COLUMNS } from "./raportColumns";
 
-type TabName = "import" | "preview" | "dashboard" | "validation" | "export" | "settings";
+type TabName =
+  | "import"
+  | "preview"
+  | "dashboard"
+  | "validation"
+  | "attention"
+  | "export"
+  | "settings";
 
 const els = {
   tabImportBtn: document.getElementById("tab-btn-import") as HTMLButtonElement,
@@ -15,6 +22,9 @@ const els = {
   tabValidationBtn: document.getElementById(
     "tab-btn-validation",
   ) as HTMLButtonElement,
+  tabAttentionBtn: document.getElementById(
+    "tab-btn-attention",
+  ) as HTMLButtonElement,
   tabExportBtn: document.getElementById("tab-btn-export") as HTMLButtonElement,
   tabSettingsBtn: document.getElementById(
     "tab-btn-settings",
@@ -24,6 +34,7 @@ const els = {
   tabPreview: document.getElementById("tab-preview") as HTMLElement,
   tabDashboard: document.getElementById("tab-dashboard") as HTMLElement,
   tabValidation: document.getElementById("tab-validation") as HTMLElement,
+  tabAttention: document.getElementById("tab-attention") as HTMLElement,
   tabExport: document.getElementById("tab-export") as HTMLElement,
   tabSettings: document.getElementById("tab-settings") as HTMLElement,
 
@@ -87,6 +98,37 @@ const els = {
   validationMeta: document.getElementById("validation-meta") as HTMLElement,
   validationGroups: document.getElementById("validation-groups") as HTMLElement,
   validationStatus: document.getElementById("validation-status") as HTMLElement,
+
+  attentionMonth: document.getElementById("attention-month") as HTMLInputElement,
+  attentionPeriod: document.getElementById(
+    "attention-period",
+  ) as HTMLSelectElement,
+  attentionYear: document.getElementById("attention-year") as HTMLInputElement,
+  attentionGrouping: document.getElementById(
+    "attention-grouping",
+  ) as HTMLSelectElement,
+  btnAttentionRefresh: document.getElementById(
+    "btn-attention-refresh",
+  ) as HTMLButtonElement,
+  attentionMeta: document.getElementById("attention-meta") as HTMLElement,
+  attentionList: document.getElementById("attention-list") as HTMLElement,
+  attentionStatus: document.getElementById("attention-status") as HTMLElement,
+
+  attentionAgentBtn: document.getElementById(
+    "attention-filter-agent-btn",
+  ) as HTMLButtonElement,
+  attentionAgentPopover: document.getElementById(
+    "attention-filter-agent-popover",
+  ) as HTMLElement,
+  attentionAgentSearch: document.getElementById(
+    "attention-filter-agent-search",
+  ) as HTMLInputElement,
+  attentionAgentList: document.getElementById(
+    "attention-filter-agent-list",
+  ) as HTMLElement,
+  btnAttentionAgentClear: document.getElementById(
+    "attention-filter-agent-clear",
+  ) as HTMLButtonElement,
 
   exportPeriod: document.getElementById("export-period") as HTMLSelectElement,
   exportMonth: document.getElementById("export-month") as HTMLInputElement,
@@ -346,6 +388,7 @@ function setTab(name: TabName) {
   els.tabPreviewBtn.classList.toggle("active", name === "preview");
   els.tabDashboardBtn.classList.toggle("active", name === "dashboard");
   els.tabValidationBtn.classList.toggle("active", name === "validation");
+  els.tabAttentionBtn.classList.toggle("active", name === "attention");
   els.tabExportBtn.classList.toggle("active", name === "export");
   els.tabSettingsBtn.classList.toggle("active", name === "settings");
 
@@ -359,6 +402,10 @@ function setTab(name: TabName) {
     "aria-selected",
     String(name === "validation"),
   );
+  els.tabAttentionBtn.setAttribute(
+    "aria-selected",
+    String(name === "attention"),
+  );
   els.tabExportBtn.setAttribute("aria-selected", String(name === "export"));
   els.tabSettingsBtn.setAttribute("aria-selected", String(name === "settings"));
 
@@ -366,12 +413,14 @@ function setTab(name: TabName) {
   els.tabPreview.classList.toggle("hidden", name !== "preview");
   els.tabDashboard.classList.toggle("hidden", name !== "dashboard");
   els.tabValidation.classList.toggle("hidden", name !== "validation");
+  els.tabAttention.classList.toggle("hidden", name !== "attention");
   els.tabExport.classList.toggle("hidden", name !== "export");
   els.tabSettings.classList.toggle("hidden", name !== "settings");
 
   if (name === "preview") void refreshPreview();
   if (name === "dashboard") void refreshDashboard();
   if (name === "validation") void refreshValidation();
+  if (name === "attention") void refreshAttention();
   if (name === "export") void refreshExportPreview();
   if (name === "settings") void refreshSettings();
 }
@@ -774,6 +823,28 @@ function updateValidationPeriodUi(): void {
   els.validationYear.classList.toggle("hidden", mode !== "year");
 }
 
+function getAttentionPeriodMode(): ValidationPeriodMode {
+  const v = String(els.attentionPeriod?.value ?? "month").trim();
+  return v === "year" ? "year" : "month";
+}
+
+function getAttentionPeriodValue(): string {
+  const mode = getAttentionPeriodMode();
+  if (mode === "year") {
+    const raw = String(els.attentionYear.value ?? "").trim();
+    const y = Number.parseInt(raw, 10);
+    if (!Number.isFinite(y) || y < 1900 || y > 2200) return "";
+    return String(y).padStart(4, "0");
+  }
+  return String(els.attentionMonth.value ?? "").trim();
+}
+
+function updateAttentionPeriodUi(): void {
+  const mode = getAttentionPeriodMode();
+  els.attentionMonth.classList.toggle("hidden", mode !== "month");
+  els.attentionYear.classList.toggle("hidden", mode !== "year");
+}
+
 function getExportPeriodMode(): ValidationPeriodMode {
   const v = String(els.exportPeriod?.value ?? "month").trim();
   return v === "year" ? "year" : "month";
@@ -805,6 +876,7 @@ type ValidationDateGrouping =
   | "months2";
 
 const VALIDATION_GROUPING_STORAGE_KEY = "validationGrouping";
+const ATTENTION_GROUPING_STORAGE_KEY = "attentionGrouping";
 const EXPORT_GROUPING_STORAGE_KEY = "exportGrouping";
 
 function normalizeValidationDateGrouping(value: unknown): ValidationDateGrouping {
@@ -822,6 +894,11 @@ function getValidationGroupingOptions(): { grouping: ValidationDateGrouping } {
   return { grouping };
 }
 
+function getAttentionGroupingOptions(): { grouping: ValidationDateGrouping } {
+  const grouping = normalizeValidationDateGrouping(els.attentionGrouping?.value);
+  return { grouping };
+}
+
 function getExportGroupingOptions(): { grouping: ValidationDateGrouping } {
   const grouping = normalizeValidationDateGrouping(els.exportGrouping?.value);
   return { grouping };
@@ -831,6 +908,15 @@ function setValidationGroupingValue(value: ValidationDateGrouping): void {
   els.validationGrouping.value = value;
   try {
     localStorage.setItem(VALIDATION_GROUPING_STORAGE_KEY, value);
+  } catch {
+    // ignore
+  }
+}
+
+function setAttentionGroupingValue(value: ValidationDateGrouping): void {
+  els.attentionGrouping.value = value;
+  try {
+    localStorage.setItem(ATTENTION_GROUPING_STORAGE_KEY, value);
   } catch {
     // ignore
   }
@@ -1018,6 +1104,149 @@ function setAvailableExportAgents(agents: unknown): void {
   renderExportAgentList();
 }
 
+const ATTENTION_AGENTS_STORAGE_KEY = "attentionAgents";
+type AttentionAgentOption = { key: string; name: string };
+let attentionAgentOptions: AttentionAgentOption[] = [];
+let attentionAgentSelectedKeys = new Set<string>();
+
+let attentionAgentOutsideClickUnsub: (() => void) | null = null;
+let attentionAgentKeydownUnsub: (() => void) | null = null;
+
+function persistAttentionAgentSelection(): void {
+  try {
+    localStorage.setItem(
+      ATTENTION_AGENTS_STORAGE_KEY,
+      JSON.stringify(Array.from(attentionAgentSelectedKeys)),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function getSelectedAttentionAgents(): string[] {
+  if (!attentionAgentSelectedKeys.size || !attentionAgentOptions.length) return [];
+  const map = new Map(attentionAgentOptions.map((o) => [o.key, o.name] as const));
+  const out: string[] = [];
+  for (const k of attentionAgentSelectedKeys) {
+    const v = map.get(k);
+    if (v) out.push(v);
+  }
+  out.sort((a, b) => a.localeCompare(b));
+  return out;
+}
+
+function updateAttentionAgentUi(): void {
+  const selected = getSelectedAttentionAgents();
+  els.btnAttentionAgentClear.disabled = selected.length === 0;
+
+  if (!attentionAgentOptions.length) {
+    els.attentionAgentBtn.textContent = "Agent celny: ładowanie…";
+    els.attentionAgentBtn.disabled = true;
+    return;
+  }
+
+  els.attentionAgentBtn.disabled = false;
+  if (selected.length === 0) {
+    els.attentionAgentBtn.textContent = "Agent celny: wszyscy";
+  } else if (selected.length === 1) {
+    els.attentionAgentBtn.textContent = `Agent celny: ${selected[0]}`;
+  } else {
+    els.attentionAgentBtn.textContent = `Agent celny: ${selected.length} wybranych`;
+  }
+}
+
+function renderAttentionAgentList(): void {
+  const q = String(els.attentionAgentSearch.value ?? "").trim().toLowerCase();
+  const items = q
+    ? attentionAgentOptions.filter((o) => o.name.toLowerCase().includes(q))
+    : attentionAgentOptions;
+
+  els.attentionAgentList.innerHTML = "";
+  if (!items.length) {
+    els.attentionAgentList.innerHTML = `<div class="agent-filter-empty">Brak wyników.</div>`;
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  for (const o of items) {
+    const label = document.createElement("label");
+    label.className = "agent-filter-item";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "form-check-input";
+    input.dataset.key = o.key;
+    input.checked = attentionAgentSelectedKeys.has(o.key);
+
+    const span = document.createElement("span");
+    span.textContent = o.name;
+
+    label.appendChild(input);
+    label.appendChild(span);
+    frag.appendChild(label);
+  }
+  els.attentionAgentList.appendChild(frag);
+}
+
+function setAttentionAgentPopoverOpen(open: boolean): void {
+  els.attentionAgentPopover.classList.toggle("hidden", !open);
+  if (open) {
+    renderAttentionAgentList();
+    els.attentionAgentSearch.focus();
+    els.attentionAgentSearch.select();
+
+    if (!attentionAgentOutsideClickUnsub) {
+      const onDown = (e: MouseEvent) => {
+        const target = e.target as Node | null;
+        if (!target) return;
+        if (els.attentionAgentPopover.contains(target)) return;
+        if (els.attentionAgentBtn.contains(target)) return;
+        setAttentionAgentPopoverOpen(false);
+      };
+      document.addEventListener("mousedown", onDown, true);
+      attentionAgentOutsideClickUnsub = () =>
+        document.removeEventListener("mousedown", onDown, true);
+    }
+
+    if (!attentionAgentKeydownUnsub) {
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setAttentionAgentPopoverOpen(false);
+      };
+      document.addEventListener("keydown", onKey, true);
+      attentionAgentKeydownUnsub = () =>
+        document.removeEventListener("keydown", onKey, true);
+    }
+  } else {
+    attentionAgentOutsideClickUnsub?.();
+    attentionAgentOutsideClickUnsub = null;
+    attentionAgentKeydownUnsub?.();
+    attentionAgentKeydownUnsub = null;
+  }
+}
+
+function setAvailableAttentionAgents(agents: unknown): void {
+  const input = Array.isArray(agents) ? agents : [];
+  const map = new Map<string, string>();
+  for (const a of input) {
+    const name = String(a ?? "").trim();
+    if (!name) continue;
+    const key = normalizeAgentKey(name);
+    if (!key || map.has(key)) continue;
+    map.set(key, name);
+  }
+  attentionAgentOptions = Array.from(map.entries())
+    .map(([key, name]) => ({ key, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const availableKeys = new Set(attentionAgentOptions.map((o) => o.key));
+  attentionAgentSelectedKeys = new Set(
+    Array.from(attentionAgentSelectedKeys).filter((k) => availableKeys.has(k)),
+  );
+
+  updateAttentionAgentUi();
+  renderAttentionAgentList();
+}
+
 function getExportFilters(): ExportFilters {
   const importer = String(els.exportFilterImporter?.value ?? "").trim();
   const agent = getSelectedExportAgents();
@@ -1122,6 +1351,86 @@ function renderValidationErrorsByAgent(items: ValidationOutlierError[]): string 
                   <th>Opis</th>
                   <th>Rozbieżność %</th>
                   <th>Agent celny</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </details>
+      `;
+    })
+    .join("");
+}
+
+function renderAttentionItemsByAgent(items: ValidationOutlierError[]): string {
+  if (!items || items.length === 0) {
+    return `<div class="muted" style="padding:6px 2px 10px;">Brak błędów (odchyleń poza limitem).</div>`;
+  }
+
+  const byAgent = new Map<string, ValidationOutlierError[]>();
+  for (const it of items) {
+    const raw = String(it.agent_celny ?? "").trim();
+    const agent = raw.length > 0 ? raw : "—";
+    const arr = byAgent.get(agent);
+    if (arr) arr.push(it);
+    else byAgent.set(agent, [it]);
+  }
+
+  const agents = Array.from(byAgent.entries()).sort(
+    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+  );
+
+  return agents
+    .map(([agent, list]) => {
+      list.sort(
+        (a, b) =>
+          (b.discrepancyPct ?? -1) - (a.discrepancyPct ?? -1) ||
+          String(a.data_mrn ?? "").localeCompare(String(b.data_mrn ?? "")) ||
+          String(a.numer_mrn ?? "").localeCompare(String(b.numer_mrn ?? "")),
+      );
+
+      let countHigh = 0;
+      let countLow = 0;
+      for (const it of list) {
+        if (it.outlierSide === "high") countHigh += 1;
+        else if (it.outlierSide === "low") countLow += 1;
+      }
+
+      const rows = list
+        .map((e) => {
+          const arrow = renderCoefArrow(e.outlierSide);
+          const opisParts = [
+            e.data_mrn ?? "-",
+            e.nr_sad ? `SAD: ${e.nr_sad}` : "",
+            `coef=${formatNum(e.coef)}`,
+            `limit=${formatNum(e.limit)}`,
+          ].filter(Boolean);
+          const opis = opisParts.join(" • ");
+          return `<tr class="outlier">
+            <td class="mono">${escapeHtml(e.data_mrn ?? "-")}</td>
+            <td class="mono">${escapeHtml(e.nr_sad ?? "-")}</td>
+            <td class="mono">${escapeHtml(e.numer_mrn ?? "-")}</td>
+            <td class="mono" title="${escapeHtml(opis)}">${arrow}<span style="margin-left:6px;">${escapeHtml(formatPct(e.discrepancyPct))}</span></td>
+          </tr>`;
+        })
+        .join("");
+
+      return `
+        <details class="accordion validation-agent" open>
+          <summary>
+            <span class="mrn-code" title="${escapeHtml(agent)}">${escapeHtml(agent)}</span>
+            <span class="badge rounded-pill badge-count">${list.length}</span>
+            <span class="badge rounded-pill badge-orange" title="Powyżej górnej granicy IQR">↑ ${countHigh}</span>
+            <span class="badge rounded-pill badge-orange" title="Poniżej dolnej granicy IQR">↓ ${countLow}</span>
+          </summary>
+          <div class="accordion-body">
+            <table class="table table-sm table-dark table-hover mini-table" style="margin:0">
+              <thead>
+                <tr>
+                  <th>Data MRN</th>
+                  <th>Nr SAD</th>
+                  <th>MRN</th>
+                  <th>Odchylenie (IQR)</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
@@ -1468,6 +1777,17 @@ async function ensureExportDefaults() {
   }
 }
 
+async function ensureAttentionDefaults() {
+  if (els.attentionMonth.value && els.attentionYear.value) return;
+  try {
+    const res = await window.api.getValidationDefaultMonth();
+    if (res.month && !els.attentionMonth.value) els.attentionMonth.value = res.month;
+    if (res.month && !els.attentionYear.value) els.attentionYear.value = String(res.month).slice(0, 4);
+  } catch {
+    // ignore
+  }
+}
+
 async function refreshValidation() {
   setStatus(els.validationStatus, "");
   updateValidationPeriodUi();
@@ -1680,6 +2000,78 @@ function renderPreviewTable(rows: Array<Record<string, unknown>>): string {
   `;
 }
 
+async function refreshAttention() {
+  setStatus(els.attentionStatus, "");
+  updateAttentionPeriodUi();
+  await ensureAttentionDefaults();
+  const period = getAttentionPeriodValue();
+  if (!period) {
+    setStatus(els.attentionStatus, "Wybierz miesiąc lub rok.");
+    return;
+  }
+
+  els.attentionList.innerHTML = "";
+  els.attentionMeta.textContent = "";
+  setStatus(els.attentionStatus, "Ładowanie...");
+  setBusy(true);
+
+  try {
+    const outliers = await window.api.getValidationOutlierErrors(
+      period,
+      undefined,
+      getAttentionGroupingOptions(),
+    );
+
+    setAvailableAttentionAgents(outliers.availableAgents);
+
+    const selectedKeys = attentionAgentSelectedKeys;
+    const filtered =
+      selectedKeys.size === 0
+        ? (outliers.items ?? [])
+        : (outliers.items ?? []).filter((it) => {
+            const k = normalizeAgentKey(it.agent_celny);
+            return k && selectedKeys.has(k);
+          });
+
+    const groupingValue = getAttentionGroupingOptions().grouping;
+    const groupingLabel =
+      Array.from(els.attentionGrouping.options).find(
+        (o) => String(o.value) === String(groupingValue),
+      )?.textContent ?? String(groupingValue);
+
+    const selectedAgents = getSelectedAttentionAgents();
+    const agentLabel =
+      selectedAgents.length === 0
+        ? "wszyscy"
+        : selectedAgents.length === 1
+          ? selectedAgents[0]
+          : `${selectedAgents.length} wybranych`;
+
+    let countHigh = 0;
+    let countLow = 0;
+    for (const it of filtered) {
+      if (it.outlierSide === "high") countHigh += 1;
+      else if (it.outlierSide === "low") countLow += 1;
+    }
+
+    els.attentionMeta.innerHTML = `
+      <div class="meta-lines">
+        <div><span class="muted">Okres:</span> <span class="mono">${escapeHtml(period)}</span></div>
+        <div><span class="muted">Zakres:</span> <span class="mono">${escapeHtml(outliers.range.start)}–${escapeHtml(outliers.range.end)}</span></div>
+        <div><span class="muted">IQR:</span> ${escapeHtml(String(groupingLabel).trim())} <span class="muted">• Agent:</span> ${escapeHtml(agentLabel)}</div>
+        <div><span class="muted">Błędy:</span> <span class="mono">${filtered.length}</span> <span class="muted">• ↑</span> <span class="mono">${countHigh}</span> <span class="muted">• ↓</span> <span class="mono">${countLow}</span></div>
+      </div>
+    `;
+
+    els.attentionList.innerHTML = renderAttentionItemsByAgent(filtered);
+    setStatus(els.attentionStatus, "");
+  } catch (e: unknown) {
+    setStatus(els.attentionStatus, `Błąd: ${errorMessage(e)}`);
+  } finally {
+    setBusy(false);
+  }
+}
+
 async function refreshExportPreview() {
   setStatus(els.exportStatus, "");
   updateExportPeriodUi();
@@ -1846,6 +2238,7 @@ els.tabImportBtn.addEventListener("click", () => setTab("import"));
 els.tabPreviewBtn.addEventListener("click", () => setTab("preview"));
 els.tabDashboardBtn.addEventListener("click", () => setTab("dashboard"));
 els.tabValidationBtn.addEventListener("click", () => setTab("validation"));
+els.tabAttentionBtn.addEventListener("click", () => setTab("attention"));
 els.tabExportBtn.addEventListener("click", () => setTab("export"));
 els.tabSettingsBtn.addEventListener("click", () => setTab("settings"));
 
@@ -1975,6 +2368,81 @@ els.validationGrouping.addEventListener("change", () => {
   const v = normalizeValidationDateGrouping(els.validationGrouping.value);
   setValidationGroupingValue(v);
   void refreshValidation();
+});
+
+let attentionDebounce: number | null = null;
+const scheduleAttentionRefresh = () => {
+  if (attentionDebounce != null) window.clearTimeout(attentionDebounce);
+  attentionDebounce = window.setTimeout(() => {
+    attentionDebounce = null;
+    if (state.tab === "attention") void refreshAttention();
+  }, 280);
+};
+
+els.btnAttentionRefresh.addEventListener("click", () => void refreshAttention());
+els.attentionPeriod.addEventListener("change", () => {
+  updateAttentionPeriodUi();
+  scheduleAttentionRefresh();
+});
+els.attentionMonth.addEventListener("change", () => scheduleAttentionRefresh());
+els.attentionYear.addEventListener("change", () => scheduleAttentionRefresh());
+updateAttentionPeriodUi();
+
+try {
+  const saved =
+    localStorage.getItem(ATTENTION_GROUPING_STORAGE_KEY) ||
+    localStorage.getItem(VALIDATION_GROUPING_STORAGE_KEY);
+  if (saved) {
+    els.attentionGrouping.value = normalizeValidationDateGrouping(saved);
+  }
+} catch {
+  // ignore
+}
+
+els.attentionGrouping.addEventListener("change", () => {
+  const v = normalizeValidationDateGrouping(els.attentionGrouping.value);
+  setAttentionGroupingValue(v);
+  scheduleAttentionRefresh();
+});
+
+try {
+  const saved = localStorage.getItem(ATTENTION_AGENTS_STORAGE_KEY);
+  if (saved) {
+    const parsed = JSON.parse(saved) as unknown;
+    const keys = Array.isArray(parsed)
+      ? parsed.map((v) => String(v ?? "").trim()).filter(Boolean)
+      : [];
+    attentionAgentSelectedKeys = new Set(keys);
+  }
+} catch {
+  // ignore
+}
+
+els.attentionAgentBtn.addEventListener("click", () => {
+  if (els.attentionAgentBtn.disabled) return;
+  const open = els.attentionAgentPopover.classList.contains("hidden");
+  setAttentionAgentPopoverOpen(open);
+});
+els.attentionAgentSearch.addEventListener("input", () =>
+  renderAttentionAgentList(),
+);
+els.btnAttentionAgentClear.addEventListener("click", () => {
+  attentionAgentSelectedKeys.clear();
+  persistAttentionAgentSelection();
+  updateAttentionAgentUi();
+  renderAttentionAgentList();
+  scheduleAttentionRefresh();
+});
+els.attentionAgentList.addEventListener("change", (e) => {
+  const target = e.target as HTMLInputElement | null;
+  if (!target || target.tagName !== "INPUT" || target.type !== "checkbox") return;
+  const key = String(target.dataset.key ?? "").trim();
+  if (!key) return;
+  if (target.checked) attentionAgentSelectedKeys.add(key);
+  else attentionAgentSelectedKeys.delete(key);
+  persistAttentionAgentSelection();
+  updateAttentionAgentUi();
+  scheduleAttentionRefresh();
 });
 
 try {
