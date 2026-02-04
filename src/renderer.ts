@@ -98,6 +98,9 @@ const els = {
   validationMeta: document.getElementById("validation-meta") as HTMLElement,
   validationGroups: document.getElementById("validation-groups") as HTMLElement,
   validationStatus: document.getElementById("validation-status") as HTMLElement,
+  validationActiveFilters: document.getElementById(
+    "validation-active-filters",
+  ) as HTMLElement,
 
   attentionMonth: document.getElementById("attention-month") as HTMLInputElement,
   attentionPeriod: document.getElementById(
@@ -113,6 +116,9 @@ const els = {
   attentionMeta: document.getElementById("attention-meta") as HTMLElement,
   attentionList: document.getElementById("attention-list") as HTMLElement,
   attentionStatus: document.getElementById("attention-status") as HTMLElement,
+  attentionActiveFilters: document.getElementById(
+    "attention-active-filters",
+  ) as HTMLElement,
 
   attentionAgentBtn: document.getElementById(
     "attention-filter-agent-btn",
@@ -140,6 +146,7 @@ const els = {
   exportMeta: document.getElementById("export-meta") as HTMLElement,
   exportPreview: document.getElementById("export-preview") as HTMLElement,
   exportStatus: document.getElementById("export-status") as HTMLElement,
+  exportActiveFilters: document.getElementById("export-active-filters") as HTMLElement,
 
   exportFilterImporter: document.getElementById("export-filter-importer") as HTMLInputElement,
   exportAgentBtn: document.getElementById("export-filter-agent-btn") as HTMLButtonElement,
@@ -957,10 +964,94 @@ function setValidationMrnFilterValue(value: string): void {
 function updateValidationMrnFilterUi(): void {
   const v = getValidationMrnFilterValue();
   els.btnValidationMrnClear.classList.toggle("d-none", v.length === 0);
+  renderValidationActiveFilters();
 }
 
 function getExportMrnFilterValue(): string {
   return String(els.exportMrnFilter?.value ?? "").trim();
+}
+
+function setExportMrnFilterValue(value: string): void {
+  els.exportMrnFilter.value = value;
+  try {
+    localStorage.setItem(EXPORT_MRN_FILTER_STORAGE_KEY, value);
+  } catch {
+    // ignore
+  }
+}
+
+type ActiveFilterChip = {
+  text: string;
+  ariaRemove: string;
+  remove: () => void;
+};
+
+function renderActiveFilterChips(
+  container: HTMLElement,
+  chips: ActiveFilterChip[],
+  onClearAll: (() => void) | null,
+): void {
+  container.innerHTML = "";
+  container.classList.toggle("hidden", chips.length === 0);
+  if (chips.length === 0) return;
+
+  const frag = document.createDocumentFragment();
+  for (const c of chips) {
+    const chip = document.createElement("div");
+    chip.className = "filter-chip";
+
+    const label = document.createElement("span");
+    label.className = "filter-chip-label";
+    label.textContent = c.text;
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "filter-chip-remove";
+    remove.setAttribute("aria-label", c.ariaRemove);
+    remove.textContent = "×";
+    remove.addEventListener("click", (e) => {
+      e.preventDefault();
+      c.remove();
+    });
+
+    chip.appendChild(label);
+    chip.appendChild(remove);
+    frag.appendChild(chip);
+  }
+
+  if (onClearAll) {
+    const clearAll = document.createElement("button");
+    clearAll.type = "button";
+    clearAll.className = "btn btn-outline-light btn-sm filter-clear-all";
+    clearAll.textContent = "Wyczyść wszystko";
+    clearAll.addEventListener("click", (e) => {
+      e.preventDefault();
+      onClearAll();
+    });
+    frag.appendChild(clearAll);
+  }
+
+  container.appendChild(frag);
+}
+
+function renderValidationActiveFilters(): void {
+  const mrn = getValidationMrnFilterValue();
+  const chips: ActiveFilterChip[] = [];
+  if (mrn) {
+    chips.push({
+      text: `MRN: ${mrn}`,
+      ariaRemove: "Usuń filtr MRN",
+      remove: () => {
+        setValidationMrnFilterValue("");
+        void refreshValidation();
+      },
+    });
+  }
+
+  renderActiveFilterChips(els.validationActiveFilters, chips, () => {
+    setValidationMrnFilterValue("");
+    void refreshValidation();
+  });
 }
 
 type ExportFilters = {
@@ -1135,6 +1226,30 @@ function getSelectedAttentionAgents(): string[] {
   return out;
 }
 
+function renderAttentionActiveFilters(): void {
+  const selected = getSelectedAttentionAgents();
+  const chips: ActiveFilterChip[] = selected.map((name) => ({
+    text: `Agent: ${name}`,
+    ariaRemove: `Usuń filtr Agent: ${name}`,
+    remove: () => {
+      attentionAgentSelectedKeys.delete(normalizeAgentKey(name));
+      persistAttentionAgentSelection();
+      updateAttentionAgentUi();
+      renderAttentionAgentList();
+      scheduleAttentionRefresh();
+    },
+  }));
+
+  renderActiveFilterChips(els.attentionActiveFilters, chips, () => {
+    attentionAgentSelectedKeys.clear();
+    persistAttentionAgentSelection();
+    setAttentionAgentPopoverOpen(false);
+    updateAttentionAgentUi();
+    renderAttentionAgentList();
+    scheduleAttentionRefresh();
+  });
+}
+
 function updateAttentionAgentUi(): void {
   const selected = getSelectedAttentionAgents();
   els.btnAttentionAgentClear.disabled = selected.length === 0;
@@ -1153,6 +1268,8 @@ function updateAttentionAgentUi(): void {
   } else {
     els.attentionAgentBtn.textContent = `Agent celny: ${selected.length} wybranych`;
   }
+
+  renderAttentionActiveFilters();
 }
 
 function renderAttentionAgentList(): void {
@@ -1263,6 +1380,7 @@ function updateExportFiltersUi(): void {
   const f = getExportFilters();
   const any = Boolean(f.importer || (f.agent && f.agent.length) || f.dzial);
   els.btnExportFiltersClear.disabled = !any;
+  renderExportActiveFilters();
 }
 
 function clearExportFilters(): void {
@@ -1271,6 +1389,72 @@ function clearExportFilters(): void {
   els.exportFilterDzial.value = "";
   updateExportAgentUi();
   updateExportFiltersUi();
+}
+
+function renderExportActiveFilters(): void {
+  const mrn = getExportMrnFilterValue();
+  const importer = String(els.exportFilterImporter?.value ?? "").trim();
+  const dzial = String(els.exportFilterDzial?.value ?? "").trim();
+  const agents = getSelectedExportAgents();
+
+  const chips: ActiveFilterChip[] = [];
+  if (mrn) {
+    chips.push({
+      text: `MRN: ${mrn}`,
+      ariaRemove: "Usuń filtr MRN",
+      remove: () => {
+        setExportMrnFilterValue("");
+        updateExportFiltersUi();
+        scheduleExportPreviewRefresh();
+      },
+    });
+  }
+
+  if (importer) {
+    chips.push({
+      text: `Importer: ${importer}`,
+      ariaRemove: "Usuń filtr Importer",
+      remove: () => {
+        els.exportFilterImporter.value = "";
+        updateExportFiltersUi();
+        scheduleExportPreviewRefresh();
+      },
+    });
+  }
+
+  for (const a of agents) {
+    chips.push({
+      text: `Agent: ${a}`,
+      ariaRemove: `Usuń filtr Agent: ${a}`,
+      remove: () => {
+        exportAgentSelectedKeys.delete(normalizeAgentKey(a));
+        setExportAgentPopoverOpen(false);
+        updateExportAgentUi();
+        renderExportAgentList();
+        updateExportFiltersUi();
+        scheduleExportPreviewRefresh();
+      },
+    });
+  }
+
+  if (dzial) {
+    chips.push({
+      text: `Dział: ${dzial}`,
+      ariaRemove: "Usuń filtr Dział",
+      remove: () => {
+        els.exportFilterDzial.value = "";
+        updateExportFiltersUi();
+        scheduleExportPreviewRefresh();
+      },
+    });
+  }
+
+  renderActiveFilterChips(els.exportActiveFilters, chips, () => {
+    setExportMrnFilterValue("");
+    clearExportFilters();
+    setExportAgentPopoverOpen(false);
+    scheduleExportPreviewRefresh();
+  });
 }
 
 function formatPct(pct: number | null): string {
@@ -2562,6 +2746,7 @@ els.exportMrnFilter.addEventListener("input", () => {
   } catch {
     // ignore
   }
+  updateExportFiltersUi();
   if (exportMrnDebounce != null) window.clearTimeout(exportMrnDebounce);
   exportMrnDebounce = window.setTimeout(() => {
     exportMrnDebounce = null;
