@@ -141,6 +141,9 @@ const els = {
   exportYear: document.getElementById("export-year") as HTMLInputElement,
   exportGrouping: document.getElementById("export-grouping") as HTMLSelectElement,
   exportMrnFilter: document.getElementById("export-mrn-filter") as HTMLInputElement,
+  exportTableSearch: document.getElementById(
+    "export-table-search",
+  ) as HTMLInputElement,
   btnExportRefresh: document.getElementById("btn-export-refresh") as HTMLButtonElement,
   btnExportDo: document.getElementById("btn-export-do") as HTMLButtonElement,
   exportMeta: document.getElementById("export-meta") as HTMLElement,
@@ -1113,6 +1116,7 @@ function formatBucketLabel(start: string, end: string): string {
 
 const VALIDATION_MRN_FILTER_STORAGE_KEY = "validationMrnFilter";
 const EXPORT_MRN_FILTER_STORAGE_KEY = "exportMrnFilter";
+const EXPORT_TABLE_SEARCH_STORAGE_KEY = "exportTableSearch";
 
 function getValidationMrnFilterValue(): string {
   return String(els.validationMrnFilter?.value ?? "").trim();
@@ -1142,6 +1146,19 @@ function setExportMrnFilterValue(value: string): void {
   els.exportMrnFilter.value = value;
   try {
     localStorage.setItem(EXPORT_MRN_FILTER_STORAGE_KEY, value);
+  } catch {
+    // ignore
+  }
+}
+
+function getExportTableSearchValue(): string {
+  return String(els.exportTableSearch?.value ?? "").trim();
+}
+
+function setExportTableSearchValue(value: string): void {
+  els.exportTableSearch.value = value;
+  try {
+    localStorage.setItem(EXPORT_TABLE_SEARCH_STORAGE_KEY, value);
   } catch {
     // ignore
   }
@@ -2372,6 +2389,128 @@ function renderPreviewTable(rows: Array<Record<string, unknown>>): string {
   `;
 }
 
+function tokenizeSearchQuery(queryRaw: string): string[] {
+  return String(queryRaw ?? "")
+    .trim()
+    .split(/\s+/g)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function mergeRanges(ranges: Array<[number, number]>): Array<[number, number]> {
+  if (ranges.length <= 1) return ranges;
+  ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const out: Array<[number, number]> = [];
+  let cur = ranges[0];
+  for (let i = 1; i < ranges.length; i++) {
+    const r = ranges[i];
+    if (r[0] <= cur[1]) cur = [cur[0], Math.max(cur[1], r[1])];
+    else {
+      out.push(cur);
+      cur = r;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+function highlightText(rawText: string, tokens: string[]): string {
+  const raw = String(rawText ?? "");
+  if (!raw) return "";
+  if (!tokens.length) return escapeHtml(raw);
+
+  const lower = raw.toLocaleLowerCase();
+  const ranges: Array<[number, number]> = [];
+  for (const t of tokens) {
+    const token = t.toLocaleLowerCase();
+    if (!token) continue;
+    let idx = 0;
+    while (idx < lower.length) {
+      const at = lower.indexOf(token, idx);
+      if (at === -1) break;
+      ranges.push([at, at + token.length]);
+      idx = at + token.length;
+    }
+  }
+
+  const merged = mergeRanges(ranges);
+  if (!merged.length) return escapeHtml(raw);
+
+  let out = "";
+  let pos = 0;
+  for (const [a, b] of merged) {
+    if (a > pos) out += escapeHtml(raw.slice(pos, a));
+    out += `<mark class="hl">${escapeHtml(raw.slice(a, b))}</mark>`;
+    pos = b;
+  }
+  if (pos < raw.length) out += escapeHtml(raw.slice(pos));
+  return out;
+}
+
+function applyExportTableSearch(): void {
+  const tokens = tokenizeSearchQuery(getExportTableSearchValue());
+  const queryLower = tokens.map((t) => t.toLocaleLowerCase());
+
+  const tables = Array.from(els.exportPreview.querySelectorAll<HTMLTableElement>("table"));
+  for (const table of tables) {
+    const headerCells = Array.from(table.querySelectorAll<HTMLTableCellElement>("thead th"));
+    const headers = headerCells.map((th) =>
+      String(th.textContent ?? "").trim().toLocaleLowerCase(),
+    );
+
+    const mrnIdx = headers
+      .map((h, i) => (h.includes("mrn") ? i : -1))
+      .filter((i) => i >= 0);
+    const sadIdx = headers
+      .map((h, i) => (h.includes("sad") ? i : -1))
+      .filter((i) => i >= 0);
+    const importerIdx = headers
+      .map((h, i) => (h.includes("importer") ? i : -1))
+      .filter((i) => i >= 0);
+
+    const targetIdx = Array.from(
+      new Set([...mrnIdx, ...sadIdx, ...importerIdx]),
+    ).sort((a, b) => a - b);
+    if (targetIdx.length === 0) continue;
+
+    const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
+    for (const tr of rows) {
+      const tds = Array.from(tr.querySelectorAll("td"));
+      const targetCells = targetIdx
+        .map((i) => tds[i])
+        .filter(Boolean) as HTMLTableCellElement[];
+
+      const texts = targetCells.map((td) => {
+        const existing = td.dataset.rawText;
+        if (existing != null) return existing;
+        const raw = String(td.textContent ?? "");
+        td.dataset.rawText = raw;
+        return raw;
+      });
+
+      if (queryLower.length === 0) {
+        tr.style.removeProperty("display");
+        for (const td of targetCells) {
+          const raw = td.dataset.rawText ?? "";
+          td.textContent = raw;
+        }
+        continue;
+      }
+
+      const joinedLower = texts.join(" ").toLocaleLowerCase();
+      const matchAll = queryLower.every((t) => joinedLower.includes(t));
+      tr.style.display = matchAll ? "" : "none";
+      if (!matchAll) continue;
+
+      for (const td of targetCells) {
+        const raw = td.dataset.rawText ?? "";
+        td.innerHTML = highlightText(raw, tokens);
+      }
+    }
+  }
+}
+
 async function refreshAttention() {
   const mySeq = ++attentionRefreshSeq;
 
@@ -2531,6 +2670,7 @@ async function refreshExportPreview() {
     `;
 
     els.exportPreview.innerHTML = `${metaHtml}${sheetHtml}`;
+    applyExportTableSearch();
     const groupingLabel =
       Array.from(els.exportGrouping.options).find(
         (o) => String(o.value) === String(p.grouping ?? ""),
@@ -2941,6 +3081,13 @@ try {
   // ignore
 }
 
+try {
+  const saved = localStorage.getItem(EXPORT_TABLE_SEARCH_STORAGE_KEY) ?? "";
+  if (!els.exportTableSearch.value) els.exportTableSearch.value = saved;
+} catch {
+  // ignore
+}
+
 let exportMrnDebounce: number | null = null;
 els.exportMrnFilter.addEventListener("input", () => {
   const v = getExportMrnFilterValue();
@@ -2955,6 +3102,17 @@ els.exportMrnFilter.addEventListener("input", () => {
     exportMrnDebounce = null;
     scheduleExportPreviewRefresh();
   }, 280);
+});
+
+let exportTableSearchDebounce: number | null = null;
+els.exportTableSearch.addEventListener("input", () => {
+  const v = getExportTableSearchValue();
+  setExportTableSearchValue(v);
+  if (exportTableSearchDebounce != null) window.clearTimeout(exportTableSearchDebounce);
+  exportTableSearchDebounce = window.setTimeout(() => {
+    exportTableSearchDebounce = null;
+    applyExportTableSearch();
+  }, 120);
 });
 
 updateExportFiltersUi();

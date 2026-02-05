@@ -713,6 +713,13 @@ details.accordion[open] > summary {
   transform: translateY(0);
 }
 
+.hl {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: rgba(var(--bs-primary-rgb), 0.28);
+  color: inherit;
+}
+
 .badge-count {
   border: 1px solid rgba(var(--bs-primary-rgb), 0.42);
   background: rgba(var(--bs-primary-rgb), 0.16);
