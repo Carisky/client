@@ -79,6 +79,28 @@ body.update-required #app {
   animation: fadeUp 160ms ease-out both;
 }
 
+.export-settings-card {
+  width: min(680px, calc(100vw - 32px));
+}
+
+.export-settings-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-settings-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.export-settings-hint {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
 .update-card-header {
   padding: 14px 16px 10px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
@@ -451,6 +473,21 @@ button {
   flex-wrap: wrap;
   gap: 8px;
   padding: 0 6px 10px;
+}
+
+.filters-panel {
+  padding: 0 6px 10px;
+}
+
+.filters-panel-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: rgba(var(--panel-rgb), 0.38);
 }
 
 .filter-chip {

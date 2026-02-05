@@ -140,6 +140,12 @@ const els = {
   exportMonth: document.getElementById("export-month") as HTMLInputElement,
   exportYear: document.getElementById("export-year") as HTMLInputElement,
   exportGrouping: document.getElementById("export-grouping") as HTMLSelectElement,
+  btnExportFiltersToggle: document.getElementById(
+    "btn-export-filters-toggle",
+  ) as HTMLButtonElement,
+  exportFiltersPanel: document.getElementById(
+    "export-filters-panel",
+  ) as HTMLElement,
   exportLayout: document.getElementById("export-layout") as HTMLSelectElement,
   exportContent: document.getElementById("export-content") as HTMLSelectElement,
   exportColumns: document.getElementById("export-columns") as HTMLSelectElement,
@@ -149,6 +155,14 @@ const els = {
   ) as HTMLInputElement,
   btnExportRefresh: document.getElementById("btn-export-refresh") as HTMLButtonElement,
   btnExportDo: document.getElementById("btn-export-do") as HTMLButtonElement,
+  btnExportSettings: document.getElementById("btn-export-settings") as HTMLButtonElement,
+  exportSettingsBackdrop: document.getElementById("export-settings-backdrop") as HTMLElement,
+  btnExportSettingsClose: document.getElementById(
+    "btn-export-settings-close",
+  ) as HTMLButtonElement,
+  btnExportSettingsOk: document.getElementById(
+    "btn-export-settings-ok",
+  ) as HTMLButtonElement,
   exportMeta: document.getElementById("export-meta") as HTMLElement,
   exportPreview: document.getElementById("export-preview") as HTMLElement,
   exportStatus: document.getElementById("export-status") as HTMLElement,
@@ -1061,6 +1075,7 @@ const EXPORT_GROUPING_STORAGE_KEY = "exportGrouping";
 const EXPORT_LAYOUT_STORAGE_KEY = "exportLayout";
 const EXPORT_CONTENT_STORAGE_KEY = "exportContent";
 const EXPORT_COLUMNS_STORAGE_KEY = "exportColumns";
+const EXPORT_FILTERS_OPEN_STORAGE_KEY = "exportFiltersOpen";
 
 type ExportLayout = "grouped" | "separate";
 type ExportContent = "full" | "summary" | "errors";
@@ -1105,12 +1120,65 @@ function updateExportXlsxOptionsUi(): void {
   els.exportColumns.title = hint;
 }
 
+function updateExportSettingsButtonUi(): void {
+  const opt = getExportXlsxOptions();
+  const layoutLabel = opt.layout === "grouped" ? "Osoby/Dni/Grupy" : "Arkusz na tabelę";
+  const contentLabel =
+    opt.content === "summary" ? "Podsumowania" : opt.content === "errors" ? "Błędy" : "Pełny";
+  const colsLabel = opt.columns === "compact" ? "Kompakt" : "Pełne";
+  els.btnExportSettings.title = `Ustawienia eksportu: Układ: ${layoutLabel} • Zakres: ${contentLabel} • Kolumny: ${colsLabel}`;
+}
+
 function persistExportXlsxOptions(): void {
   const opt = getExportXlsxOptions();
   try {
     localStorage.setItem(EXPORT_LAYOUT_STORAGE_KEY, opt.layout);
     localStorage.setItem(EXPORT_CONTENT_STORAGE_KEY, opt.content);
     localStorage.setItem(EXPORT_COLUMNS_STORAGE_KEY, opt.columns);
+  } catch {
+    // ignore
+  }
+}
+
+function setExportFiltersOpen(open: boolean, opts?: { focus?: boolean }): void {
+  els.exportFiltersPanel.classList.toggle("hidden", !open);
+  els.btnExportFiltersToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  els.btnExportFiltersToggle.title = open ? "Ukryj filtry" : "Pokaż filtry";
+  els.btnExportFiltersToggle.setAttribute(
+    "aria-label",
+    open ? "Ukryj filtry" : "Pokaż filtry",
+  );
+  if (!open) {
+    setExportAgentPopoverOpen(false);
+    return;
+  }
+  if (opts?.focus === false) return;
+  try {
+    els.exportMrnFilter?.focus();
+  } catch {
+    // ignore
+  }
+}
+
+function getExportFiltersOpen(): boolean {
+  return !els.exportFiltersPanel.classList.contains("hidden");
+}
+
+function persistExportFiltersOpen(open: boolean): void {
+  try {
+    localStorage.setItem(EXPORT_FILTERS_OPEN_STORAGE_KEY, open ? "1" : "0");
+  } catch {
+    // ignore
+  }
+}
+
+function setExportSettingsOpen(open: boolean): void {
+  els.exportSettingsBackdrop.classList.toggle("hidden", !open);
+  if (!open) return;
+  updateExportXlsxOptionsUi();
+  updateExportSettingsButtonUi();
+  try {
+    els.exportLayout?.focus();
   } catch {
     // ignore
   }
@@ -1621,16 +1689,21 @@ function getExportFilters(): ExportFilters {
 }
 
 function updateExportFiltersUi(): void {
+  const mrn = getExportMrnFilterValue();
   const f = getExportFilters();
-  const any = Boolean(f.importer || (f.agent && f.agent.length) || f.dzial);
+  const any = Boolean(mrn || f.importer || (f.agent && f.agent.length) || f.dzial);
   els.btnExportFiltersClear.disabled = !any;
+  els.btnExportFiltersToggle.classList.toggle("btn-outline-light", !any);
+  els.btnExportFiltersToggle.classList.toggle("btn-outline-primary", any);
   renderExportActiveFilters();
 }
 
 function clearExportFilters(): void {
+  setExportMrnFilterValue("");
   els.exportFilterImporter.value = "";
   exportAgentSelectedKeys.clear();
   els.exportFilterDzial.value = "";
+  setExportAgentPopoverOpen(false);
   updateExportAgentUi();
   updateExportFiltersUi();
 }
@@ -1694,9 +1767,7 @@ function renderExportActiveFilters(): void {
   }
 
   renderActiveFilterChips(els.exportActiveFilters, chips, () => {
-    setExportMrnFilterValue("");
     clearExportFilters();
-    setExportAgentPopoverOpen(false);
     scheduleExportPreviewRefresh();
   });
 }
@@ -3074,6 +3145,34 @@ const scheduleExportPreviewRefresh = () => {
 };
 
 els.btnExportRefresh.addEventListener("click", () => void refreshExportPreview());
+els.btnExportSettings.addEventListener("click", () => setExportSettingsOpen(true));
+els.btnExportSettingsClose.addEventListener("click", () =>
+  setExportSettingsOpen(false),
+);
+els.btnExportSettingsOk.addEventListener("click", () =>
+  setExportSettingsOpen(false),
+);
+els.btnExportFiltersToggle.addEventListener("click", () => {
+  const open = !getExportFiltersOpen();
+  setExportFiltersOpen(open);
+  persistExportFiltersOpen(open);
+});
+els.exportSettingsBackdrop.addEventListener("click", (e) => {
+  if (e.target === els.exportSettingsBackdrop) setExportSettingsOpen(false);
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const settingsOpen = !els.exportSettingsBackdrop.classList.contains("hidden");
+  if (settingsOpen) {
+    setExportSettingsOpen(false);
+    return;
+  }
+  const filtersOpen = getExportFiltersOpen();
+  if (filtersOpen) {
+    setExportFiltersOpen(false);
+    persistExportFiltersOpen(false);
+  }
+});
 els.btnExportDo.addEventListener("click", async () => {
   setStatus(els.exportStatus, "");
   updateExportPeriodUi();
@@ -3147,18 +3246,22 @@ try {
   // ignore
 }
 updateExportXlsxOptionsUi();
+updateExportSettingsButtonUi();
 
 els.exportLayout.addEventListener("change", () => {
   persistExportXlsxOptions();
   updateExportXlsxOptionsUi();
+  updateExportSettingsButtonUi();
   scheduleExportPreviewRefresh();
 });
 els.exportContent.addEventListener("change", () => {
   persistExportXlsxOptions();
+  updateExportSettingsButtonUi();
   scheduleExportPreviewRefresh();
 });
 els.exportColumns.addEventListener("change", () => {
   persistExportXlsxOptions();
+  updateExportSettingsButtonUi();
   scheduleExportPreviewRefresh();
 });
 
@@ -3172,6 +3275,13 @@ try {
 try {
   const saved = localStorage.getItem(EXPORT_TABLE_SEARCH_STORAGE_KEY) ?? "";
   if (!els.exportTableSearch.value) els.exportTableSearch.value = saved;
+} catch {
+  // ignore
+}
+
+try {
+  const savedOpen = localStorage.getItem(EXPORT_FILTERS_OPEN_STORAGE_KEY);
+  if (savedOpen === "1") setExportFiltersOpen(true, { focus: false });
 } catch {
   // ignore
 }

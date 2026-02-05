@@ -284,45 +284,23 @@
                   <option value="month">Miesi&#261;c</option>
                   <option value="months2">2 miesi&#261;ce</option>
                 </select>
-                <label class="muted" for="export-layout" style="margin-left: 10px; margin-right: 6px;">Uk&#322;ad</label>
-                <select id="export-layout" class="form-select form-select-sm" style="max-width: 170px;">
-                  <option value="separate" selected>Arkusz na tabel&#281;</option>
-                  <option value="grouped">Osoby/Dni/Grupy</option>
-                </select>
-                <label class="muted" for="export-content" style="margin-left: 10px; margin-right: 6px;">Zakres</label>
-                <select id="export-content" class="form-select form-select-sm" style="max-width: 190px;">
-                  <option value="full" selected>Pe&#322;ny</option>
-                  <option value="summary">Tylko podsumowania</option>
-                  <option value="errors">Tylko b&#322;&#281;dy</option>
-                </select>
-                <label class="muted" for="export-columns" style="margin-left: 10px; margin-right: 6px;">Kolumny</label>
-                <select id="export-columns" class="form-select form-select-sm" style="max-width: 140px;">
-                  <option value="full" selected>Pe&#322;ne</option>
-                  <option value="compact">Kompakt</option>
-                </select>
-                <input id="export-mrn-filter" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Numer MRN" style="max-width: 190px;" />
-
-                <input id="export-filter-importer" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Importer" style="max-width: 220px;" />
-                <input id="export-table-search" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Szukaj w tabelach" style="max-width: 220px;" />
-                <div class="agent-filter" style="max-width: 220px;">
-                  <button id="export-filter-agent-btn" class="form-control form-control-sm agent-filter-btn" type="button" disabled>
-                    Agent celny: &#322;adowanie&hellip;
-                  </button>
-                  <div id="export-filter-agent-popover" class="agent-filter-popover hidden" role="dialog" aria-label="Agent celny">
-                    <div class="agent-filter-head">
-                      <input id="export-filter-agent-search" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Szukaj agenta&hellip;" />
-                      <button id="export-filter-agent-clear" class="btn btn-outline-light btn-sm" type="button" title="Wyczy&#347;&#263; wyb&#243;r">Wyczy&#347;&#263;</button>
-                    </div>
-                    <div id="export-filter-agent-list" class="agent-filter-list"></div>
-                  </div>
-                </div>
-                <input id="export-filter-dzial" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Dzia&#322;" style="max-width: 160px;" />
-
-                <button id="btn-export-filters-clear" class="btn btn-outline-light btn-sm" title="Wyczy&#347;&#263; filtry" aria-label="Wyczy&#347;&#263; filtry">
-                  <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin-right:0">
-                    <path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                <button id="btn-export-settings" class="btn btn-outline-light btn-sm" title="Ustawienia eksportu do Excel" aria-label="Ustawienia eksportu do Excel">
+                  <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h10M4 17h10M4 12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <path d="M14 7a2 2 0 1 0 4 0a2 2 0 0 0-4 0Z" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M10 17a2 2 0 1 0 4 0a2 2 0 0 0-4 0Z" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M16 12a2 2 0 1 0 4 0a2 2 0 0 0-4 0Z" fill="none" stroke="currentColor" stroke-width="2" />
                   </svg>
+                  Opcje
                 </button>
+                <button id="btn-export-filters-toggle" class="btn btn-outline-light btn-sm" type="button" aria-expanded="false" aria-controls="export-filters-panel" title="Pokaż filtry" aria-label="Pokaż filtry">
+                  <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 5h18l-7 8v5l-4 2v-7L3 5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                  </svg>
+                  Filtry
+                </button>
+
+                <input id="export-table-search" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Szukaj w tabelach" style="max-width: 220px;" />
 
                 <button id="btn-export-refresh" class="btn btn-outline-light btn-sm">
                   <svg class="ui-icon spin-on-busy" viewBox="0 0 24 24" aria-hidden="true">
@@ -340,6 +318,31 @@
                 </button>
               </div>
               <div id="export-meta" class="page-info"></div>
+            </div>
+            <div id="export-filters-panel" class="filters-panel hidden" role="region" aria-label="Filtry eksportu do Excel">
+              <div class="filters-panel-row">
+                <input id="export-mrn-filter" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Numer MRN" style="max-width: 190px;" />
+                <input id="export-filter-importer" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Importer" style="max-width: 220px;" />
+                <div class="agent-filter" style="max-width: 220px;">
+                  <button id="export-filter-agent-btn" class="form-control form-control-sm agent-filter-btn" type="button" disabled>
+                    Agent celny: &#322;adowanie&hellip;
+                  </button>
+                  <div id="export-filter-agent-popover" class="agent-filter-popover hidden" role="dialog" aria-label="Agent celny">
+                    <div class="agent-filter-head">
+                      <input id="export-filter-agent-search" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Szukaj agenta&hellip;" />
+                      <button id="export-filter-agent-clear" class="btn btn-outline-light btn-sm" type="button" title="Wyczy&#347;&#263; wyb&#243;r">Wyczy&#347;&#263;</button>
+                    </div>
+                    <div id="export-filter-agent-list" class="agent-filter-list"></div>
+                  </div>
+                </div>
+                <input id="export-filter-dzial" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Dzia&#322;" style="max-width: 160px;" />
+
+                <button id="btn-export-filters-clear" class="btn btn-outline-light btn-sm" type="button" title="Wyczy&#347;&#263; filtry" aria-label="Wyczy&#347;&#263; filtry">
+                  <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin-right:0">
+                    <path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div id="export-active-filters" class="active-filters hidden" aria-label="Aktywne filtry"></div>
           </div>
@@ -397,6 +400,61 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div id="export-settings-backdrop" class="update-backdrop hidden">
+      <div class="update-card export-settings-card" role="dialog" aria-modal="true" aria-label="Ustawienia eksportu do Excel">
+        <div class="update-card-header">
+          <div>
+            <div class="update-title">Ustawienia eksportu do Excel</div>
+            <div class="update-sub" style="margin-top:4px">Wp&#322;ywaj&#261; na podgl&#261;d i zapis pliku.</div>
+          </div>
+          <button id="btn-export-settings-close" class="btn btn-outline-light btn-sm" type="button" aria-label="Zamknij">
+            <svg class="ui-icon right" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:0">
+              <path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+        <div class="update-card-body">
+          <div class="export-settings-rows">
+            <div class="export-settings-row">
+              <div class="settings-label">Uk&#322;ad</div>
+              <div>
+                <select id="export-layout" class="form-select form-select-sm">
+                  <option value="separate" selected>Arkusz na tabel&#281;</option>
+                  <option value="grouped">Osoby/Dni/Grupy</option>
+                </select>
+                <div class="muted export-settings-hint">Tryb „Arkusz na tabel&#281;” daje najbardziej uporz&#261;dkowany plik (Meta + tabele w osobnych arkuszach).</div>
+              </div>
+            </div>
+
+            <div class="export-settings-row">
+              <div class="settings-label">Zakres</div>
+              <div>
+                <select id="export-content" class="form-select form-select-sm">
+                  <option value="full" selected>Pe&#322;ny</option>
+                  <option value="summary">Tylko podsumowania</option>
+                  <option value="errors">Tylko b&#322;&#281;dy</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="export-settings-row">
+              <div class="settings-label">Kolumny</div>
+              <div>
+                <select id="export-columns" class="form-select form-select-sm">
+                  <option value="full" selected>Pe&#322;ne</option>
+                  <option value="compact">Kompakt</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="update-actions">
+            <button id="btn-export-settings-ok" class="btn btn-primary btn-sm" type="button">Gotowe</button>
+          </div>
+        </div>
+      </div>
     </div>
   </body>
 </html>
