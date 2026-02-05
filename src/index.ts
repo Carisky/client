@@ -97,6 +97,7 @@ const createWindow = (): void => {
     width: 1200,
     minHeight: 640,
     minWidth: 900,
+    autoHideMenuBar: process.platform !== 'darwin',
     ...(iconPath ? { icon: iconPath } : {}),
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
@@ -104,6 +105,11 @@ const createWindow = (): void => {
       nodeIntegration: false,
     },
   });
+
+  if (process.platform !== 'darwin') {
+    mainWindow.setMenu(null);
+    mainWindow.setMenuBarVisibility(false);
+  }
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
