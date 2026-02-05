@@ -177,6 +177,9 @@ const els = {
   exportFilterDzial: document.getElementById("export-filter-dzial") as HTMLInputElement,
   btnExportFiltersClear: document.getElementById("btn-export-filters-clear") as HTMLButtonElement,
 
+  themeValue: document.getElementById("theme-value") as HTMLElement,
+  themeToggle: document.getElementById("theme-toggle") as HTMLInputElement,
+
   dbPath: document.getElementById("db-path") as HTMLElement,
   btnShowDb: document.getElementById("btn-show-db") as HTMLButtonElement,
   btnClear: document.getElementById("btn-clear") as HTMLButtonElement,
@@ -200,6 +203,54 @@ const state = {
   total: 0,
   columns: [] as Array<{ field: string; label: string }>,
 };
+
+type ThemeName = "dark" | "light";
+const THEME_STORAGE_KEY = "raportSad.theme";
+
+function readStoredTheme(): ThemeName | null {
+  try {
+    const raw = localStorage.getItem(THEME_STORAGE_KEY);
+    if (raw === "dark" || raw === "light") return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getDocumentTheme(): ThemeName {
+  return document.documentElement.getAttribute("data-bs-theme") === "light"
+    ? "light"
+    : "dark";
+}
+
+function syncThemeUi(theme: ThemeName) {
+  els.themeToggle.checked = theme === "light";
+  els.themeValue.textContent = theme === "light" ? "Jasny" : "Ciemny";
+}
+
+function applyTheme(theme: ThemeName, persist: boolean) {
+  document.documentElement.setAttribute("data-bs-theme", theme);
+  document.documentElement.style.colorScheme = theme;
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      void 0;
+    }
+  }
+  syncThemeUi(theme);
+}
+
+function initTheme() {
+  const initialTheme = readStoredTheme() ?? getDocumentTheme();
+  applyTheme(initialTheme, false);
+
+  els.themeToggle.addEventListener("change", () => {
+    applyTheme(els.themeToggle.checked ? "light" : "dark", true);
+  });
+}
+
+initTheme();
 
 let busyCount = 0;
 function setBusy(isBusy: boolean) {

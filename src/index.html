@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <title>Raport SAD</title>
+    <script>
+      (() => {
+        try {
+          const theme = localStorage.getItem("raportSad.theme");
+          if (theme === "light" || theme === "dark") {
+            document.documentElement.setAttribute("data-bs-theme", theme);
+          }
+        } catch {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app">
@@ -355,6 +365,14 @@
           <div class="card card-narrow">
             <div class="card-body">
               <h2 class="h5 mb-2">Ustawienia</h2>
+              <div class="settings-row">
+                <div class="settings-label">Motyw</div>
+                <div id="theme-value" class="settings-value muted">—</div>
+                <div class="form-check form-switch m-0" style="justify-self:end;">
+                  <input id="theme-toggle" class="form-check-input" type="checkbox" role="switch" aria-label="Jasny motyw" />
+                </div>
+              </div>
+              <hr class="divider" />
               <div class="settings-row">
                 <div class="settings-label">Plik bazy danych</div>
                 <div id="db-path" class="settings-value">—</div>
