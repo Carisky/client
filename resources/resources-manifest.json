@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
-  "version": "1.1.9",
+  "version": "1.2.0",
   "channel": "master",
-  "generatedAt": "2026-02-05T11:08:13.021Z",
+  "generatedAt": "2026-02-05T11:41:15.164Z",
   "files": [
     {
       "path": "additional-data-maps.json",
