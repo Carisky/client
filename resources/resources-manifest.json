@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "version": "1.1.7",
+  "channel": "master",
+  "generatedAt": "2026-02-05T09:31:47.383Z",
+  "files": [
+    {
+      "path": "additional-data-maps.json",
+      "size": 7312,
+      "sha256": "ccc9ab4d7c3017a4e5458160dbf03d691e005afbf89fc7b3d53342636d86e139"
+    },
+    {
+      "path": "icon.ico",
+      "size": 102313,
+      "sha256": "2c35c16c15c33bf930301a2489ab504107632fad62191191a45f49abc5d56821"
+    },
+    {
+      "path": "update.json",
+      "size": 219,
+      "sha256": "b16b05847c65a19cbe9b3ed38fe4371802ef4d4869a4d5f76dc31cf26d13a840"
+    }
+  ]
+}
