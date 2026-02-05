@@ -63,26 +63,59 @@ type AgentDzialInfo = {
 };
 
 function getAgentDzialMapUserFilePath(): string {
-  return path.join(app.getPath('userData'), 'agent-dzial-map.json');
+  return path.join(app.getPath('userData'), 'additional-data-maps.json');
 }
 
 function getBundledAgentDzialMapCandidates(): string[] {
   const candidates: string[] = [];
-  // Dev: repo-root/client
-  candidates.push(path.resolve(process.cwd(), 'resources', 'agent-dzial-map.json'));
-  // Dev/webpack: resolve from compiled main folder
-  candidates.push(path.resolve(__dirname, '..', '..', 'resources', 'agent-dzial-map.json'));
-  // Packaged: extraResource copied under resources/resources/
-  candidates.push(path.resolve(process.resourcesPath, 'resources', 'agent-dzial-map.json'));
-  // Packaged fallback
-  candidates.push(path.resolve(process.resourcesPath, 'agent-dzial-map.json'));
+  const names = ['additional-data-maps.json', 'agent-dzial-map.json']; // legacy fallback
+  for (const name of names) {
+    // Dev: repo-root/client
+    candidates.push(path.resolve(process.cwd(), 'resources', name));
+    // Dev/webpack: resolve from compiled main folder
+    candidates.push(path.resolve(__dirname, '..', '..', 'resources', name));
+    // Packaged: extraResource copied under resources/resources/
+    candidates.push(path.resolve(process.resourcesPath, 'resources', name));
+    // Packaged fallback
+    candidates.push(path.resolve(process.resourcesPath, name));
+  }
   return candidates;
 }
 
 function ensureAgentDzialMapFile(): string {
   const userFile = getAgentDzialMapUserFilePath();
+  const legacyUserFile = path.join(app.getPath('userData'), 'agent-dzial-map.json');
   try {
     if (fs.existsSync(userFile)) return userFile;
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (fs.existsSync(legacyUserFile)) {
+      try {
+        const legacyText = fs.readFileSync(legacyUserFile, 'utf8');
+        const legacyParsed = JSON.parse(legacyText || '{}');
+        if (legacyParsed && typeof legacyParsed === 'object' && !Array.isArray(legacyParsed)) {
+          const departments = Object.entries(legacyParsed as Record<string, unknown>)
+            .map(([FullName, department]) => ({ FullName, department }))
+            .filter((r) => String(r.FullName ?? '').trim() && String(r.department ?? '').trim());
+          fs.mkdirSync(path.dirname(userFile), { recursive: true });
+          fs.writeFileSync(userFile, JSON.stringify({ departments }, null, 2) + '\n', 'utf8');
+          return userFile;
+        }
+      } catch {
+        // ignore and fallback to copy-as-is
+      }
+
+      try {
+        fs.mkdirSync(path.dirname(userFile), { recursive: true });
+        fs.copyFileSync(legacyUserFile, userFile);
+        return userFile;
+      } catch {
+        // ignore
+      }
+    }
   } catch {
     // ignore
   }
@@ -104,7 +137,7 @@ function ensureAgentDzialMapFile(): string {
   }
 
   try {
-    fs.writeFileSync(userFile, '{}\n', 'utf8');
+    fs.writeFileSync(userFile, JSON.stringify({ departments: [] }, null, 2) + '\n', 'utf8');
   } catch {
     // ignore
   }
@@ -112,7 +145,7 @@ function ensureAgentDzialMapFile(): string {
 }
 
 function normalizeAgentKey(value: unknown): string {
-  return String(value ?? '').trim().toLowerCase();
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function loadAgentDzialMap(): { map: Map<string, string>; info: AgentDzialInfo } {
@@ -135,21 +168,75 @@ function loadAgentDzialMap(): { map: Map<string, string>; info: AgentDzialInfo }
   try {
     parsed = JSON.parse(text || '{}');
   } catch {
-    info.error = 'Niepoprawny JSON (agent-dzial-map.json)';
-    return { map: new Map(), info };
-  }
-
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    info.error = 'Niepoprawny format słownika (oczekiwano obiektu JSON)';
+    info.error = 'Niepoprawny JSON (additional-data-maps.json)';
     return { map: new Map(), info };
   }
 
   const out = new Map<string, string>();
-  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-    const agent = normalizeAgentKey(k);
-    const dzial = String(v ?? '').trim();
-    if (!agent || !dzial) continue;
+
+  const addPair = (agentRaw: unknown, dzialRaw: unknown) => {
+    const agent = normalizeAgentKey(agentRaw);
+    const dzial = String(dzialRaw ?? '').trim();
+    if (!agent || !dzial) return;
     out.set(agent, dzial);
+  };
+
+  const parseListItem = (item: unknown) => {
+    if (Array.isArray(item) && item.length >= 2) {
+      addPair(item[0], item[1]);
+      return;
+    }
+
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+    const rec = item as Record<string, unknown>;
+
+    // Single-pair object: { "Full Name": "Department" }
+    const entries = Object.entries(rec);
+    if (entries.length === 1) {
+      addPair(entries[0][0], entries[0][1]);
+      return;
+    }
+
+    // Row object: { FullName: "...", department/departnent/oddzial/dzial/wydzial: "..." }
+    const name =
+      rec.FullName ??
+      rec.fullName ??
+      rec.fullname ??
+      rec.name ??
+      rec.agent ??
+      rec.full_name ??
+      null;
+    const dept =
+      rec.department ??
+      rec.departnent ??
+      rec.Department ??
+      rec.Departnent ??
+      rec.oddzial ??
+      rec.Oddzial ??
+      rec.dzial ??
+      rec.Dzial ??
+      rec.wydzial ??
+      rec.Wydzial ??
+      null;
+    addPair(name, dept);
+  };
+
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const rec = parsed as Record<string, unknown>;
+    const departments = rec.departments;
+    if (Array.isArray(departments)) {
+      for (const item of departments) parseListItem(item);
+    } else {
+      // Legacy format: { "Full Name": "Department", ... }
+      for (const [k, v] of Object.entries(rec)) {
+        addPair(k, v);
+      }
+    }
+  } else if (Array.isArray(parsed)) {
+    for (const item of parsed) parseListItem(item);
+  } else {
+    info.error = 'Niepoprawny format słownika (oczekiwano obiektu lub tablicy wpisów)';
+    return { map: new Map(), info };
   }
   info.rowCount = out.size;
   return { map: out, info };
@@ -163,7 +250,20 @@ export async function clearAgentDzialMap(): Promise<AgentDzialInfo> {
   const filePath = ensureAgentDzialMapFile();
   try {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, '{}\n', 'utf8');
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(fs.readFileSync(filePath, 'utf8') || '{}');
+    } catch {
+      parsed = null;
+    }
+
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const obj = parsed as Record<string, unknown>;
+      obj.departments = [];
+      fs.writeFileSync(filePath, JSON.stringify(obj, null, 2) + '\n', 'utf8');
+    } else {
+      fs.writeFileSync(filePath, JSON.stringify({ departments: [] }, null, 2) + '\n', 'utf8');
+    }
   } catch {
     // ignore
   }
@@ -273,6 +373,7 @@ export async function importRaportFromXlsx(
 ): Promise<{ rowCount: number; sourceFile: string }> {
   const client = await getPrisma();
   const report = (p: ImportProgress) => onProgress?.(p);
+  const { map: agentDzialMap } = loadAgentDzialMap();
 
   report({ stage: 'reading', message: 'Wczytywanie pliku…', current: 0, total: 0 });
 
@@ -321,8 +422,15 @@ export async function importRaportFromXlsx(
     for (let colIndex = 0; colIndex < RAPORT_COLUMNS.length; colIndex++) {
       const col = RAPORT_COLUMNS[colIndex];
       const value = normalizeCell(row[colIndex]);
-      if (value !== null) record[col.field] = value;
+      if (value !== null) {
+        if (col.field === 'zglaszajacy') record[col.field] = normalizeAgentKey(value);
+        else record[col.field] = value;
+      }
     }
+
+    const agentKey = normalizeAgentKey(record.zglaszajacy);
+    const dzial = agentKey ? agentDzialMap.get(agentKey) : null;
+    if (dzial) record.oddzial = dzial;
 
     operations.push(
       client.raportRow.create({
