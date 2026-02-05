@@ -53,6 +53,22 @@ const els = {
   meta: document.getElementById("meta") as HTMLElement,
   appVersion: document.getElementById("app-version") as HTMLElement,
 
+  updateNudge: document.getElementById("update-nudge") as HTMLElement,
+  updateNudgeText: document.getElementById("update-nudge-text") as HTMLElement,
+  updateNudgeSub: document.getElementById("update-nudge-sub") as HTMLElement,
+  updateNudgeProgressWrap: document.getElementById(
+    "update-nudge-progress-wrap",
+  ) as HTMLElement,
+  updateNudgeProgressBar: document.getElementById(
+    "update-nudge-progress-bar",
+  ) as HTMLElement,
+  btnUpdateNudgeNow: document.getElementById(
+    "btn-update-nudge-now",
+  ) as HTMLButtonElement,
+  btnUpdateNudgeDownload: document.getElementById(
+    "btn-update-nudge-download",
+  ) as HTMLButtonElement,
+
   btnPrev: document.getElementById("btn-prev") as HTMLButtonElement,
   btnNext: document.getElementById("btn-next") as HTMLButtonElement,
   btnRefresh: document.getElementById("btn-refresh") as HTMLButtonElement,
@@ -271,19 +287,16 @@ let lastUpdateCheck: Awaited<
 > | null = null;
 let lastUpdateStatus: unknown | null = null;
 let updateStatusUnsub: (() => void) | null = null;
-let updateFallbackUrl: string | null = null;
-let updatePrimaryBtn: HTMLButtonElement | null = null;
-let updateFallbackBtn: HTMLButtonElement | null = null;
 
-function renderUpdateStatus(status: unknown) {
-  if (!document.getElementById("update-backdrop")) return;
+const UPDATE_POLL_MS = 60_000;
+let updatePollTimer: number | null = null;
+let updatePollInFlight = false;
+let updateNudgeInfo: Awaited<ReturnType<typeof window.api.checkForUpdates>> | null =
+  null;
 
-  const textEl = document.getElementById("update-status-text");
-  const barWrap = document.getElementById("update-progress-wrap");
-  const barEl = document.getElementById(
-    "update-progress-bar",
-  ) as HTMLDivElement | null;
-  if (!textEl) return;
+function renderUpdateNudgeStatus(status: unknown) {
+  if (!els.updateNudge) return;
+  if (els.updateNudge.classList.contains("hidden")) return;
 
   const s = (status ?? {}) as {
     state?: unknown;
@@ -296,160 +309,143 @@ function renderUpdateStatus(status: unknown) {
     typeof s.percent === "number" && Number.isFinite(s.percent)
       ? Math.max(0, Math.min(100, s.percent))
       : null;
-const label =
-  state === "checking"
-    ? "Sprawdzam aktualizacje…"
-    : state === "available"
-      ? "Znaleziono aktualizację."
-      : state === "not-available"
-        ? "Brak dostępnych aktualizacji."
-        : state === "downloading"
-          ? `Pobieranie…${pct == null ? "" : ` ${pct.toFixed(0)}%`}`
-          : state === "downloaded"
-            ? "Pobrano. Instaluję…"
-            : state === "installing"
-              ? "Instaluję…"
-              : state === "error"
-                ? `Błąd aktualizacji: ${msg || "unknown"}`
-                : msg || "";
 
-  textEl.textContent = label;
+  const info = updateNudgeInfo;
+  const hasUpdate = Boolean(info?.updateAvailable && info?.latestVersion);
+  if (!hasUpdate) return;
 
-  if (barWrap && barEl) {
-    if (pct == null || state !== "downloading") {
-      barWrap.classList.add("d-none");
-      barEl.style.width = "0%";
-    } else {
-      barWrap.classList.remove("d-none");
-      barEl.style.width = `${pct}%`;
-    }
+  const downloading = state === "downloading" && pct != null;
+  els.updateNudgeProgressWrap.classList.toggle("d-none", !downloading);
+  if (downloading) {
+    els.updateNudgeProgressBar.style.width = `${pct}%`;
+  } else {
+    els.updateNudgeProgressBar.style.width = "0%";
   }
 
-  if (updateFallbackBtn) {
-    const showFallback = state === "error" || state === "not-available";
-    updateFallbackBtn.classList.toggle(
-      "d-none",
-      !showFallback || !updateFallbackUrl,
-    );
+  const canAuto = Boolean(info?.squirrelFeedUrl);
+  const canManual = Boolean(info?.downloadUrl);
+
+  els.btnUpdateNudgeNow.disabled =
+    !canAuto ||
+    state === "checking" ||
+    state === "downloading" ||
+    state === "downloaded" ||
+    state === "installing";
+
+  if (els.btnUpdateNudgeDownload) {
+    const showManual =
+      canManual && (!canAuto || state === "error" || state === "not-available");
+    els.btnUpdateNudgeDownload.classList.toggle("d-none", !showManual);
+    els.btnUpdateNudgeDownload.disabled = false;
   }
-  if (updatePrimaryBtn) {
-    const enable =
-      state === "idle" || state === "error" || state === "not-available";
-    updatePrimaryBtn.disabled = !enable;
-  }
+
+  const sub =
+    state === "checking"
+      ? "Sprawdzam aktualizacje…"
+      : state === "downloading"
+        ? `Pobieranie…${pct == null ? "" : ` ${pct.toFixed(0)}%`}`
+        : state === "downloaded"
+          ? "Pobrano. Instaluję…"
+          : state === "installing"
+            ? "Instaluję…"
+            : state === "error"
+              ? `Błąd aktualizacji: ${msg || "unknown"}`
+              : canAuto
+                ? "Kliknij „Zaktualizuj teraz”, aby zainstalować."
+                : "Auto-update niedostępny. Pobierz ręcznie.";
+
+  els.updateNudgeSub.textContent = sub;
 }
 
-function renderUpdateBlock(
-  latestVersion: string,
-  downloadUrl: string,
-  currentVersion: string,
-  feedUrl: string | null,
+function renderUpdateNudgeFromCheck(
+  res: Awaited<ReturnType<typeof window.api.checkForUpdates>> | null,
 ) {
-  if (document.getElementById("update-backdrop")) return;
-  document.body.classList.add("update-required");
+  if (!els.updateNudge) return;
+  updateNudgeInfo = res;
 
-  const el = document.createElement("div");
-  el.id = "update-backdrop";
-  el.className = "update-backdrop";
-  el.innerHTML = `
-  <div class="update-card" role="dialog" aria-modal="true" aria-label="Wymagana aktualizacja">
-    <div class="update-card-header">
-      <div>
-        <div class="update-title">Wymagana aktualizacja</div>
-        <div class="update-sub">Aktualna wersja: ${escapeHtml(currentVersion)} • Dostępna: ${escapeHtml(latestVersion)}</div>
-      </div>
-      <div class="update-badge">
-        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin:0">
-          <path d="M12 3v10m0 0l4-4m-4 4l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-        </svg>
-        v${escapeHtml(latestVersion)}
-      </div>
-    </div>
-    <div class="update-card-body">
-      <div class="muted">Aby kontynuować, zainstaluj najnowszą wersję aplikacji.</div>
-      <div id="update-status-text" class="muted" style="margin-top:8px"></div>
-      <div id="update-progress-wrap" class="progress d-none" style="height:8px; margin-top:8px">
-        <div id="update-progress-bar" class="progress-bar" role="progressbar" style="width:0%"></div>
-      </div>
-      <div class="update-actions">
-        <button id="btn-update-download" class="btn btn-outline-light d-none">
-          Pobierz instalator
-        </button>
-        <button id="btn-update-now" class="btn btn-primary">
-          Zaktualizuj do wersji ${escapeHtml(latestVersion)}
-        </button>
-      </div>
-    </div>
-  </div>
-`;
-  document.body.appendChild(el);
+  const show =
+    Boolean(res?.supported) &&
+    Boolean(res?.updateAvailable) &&
+    Boolean(res?.latestVersion);
+  els.updateNudge.classList.toggle("hidden", !show);
+  if (!show || !res) return;
 
-  updateFallbackUrl = downloadUrl;
-  updatePrimaryBtn = el.querySelector(
-    "#btn-update-now",
-  ) as HTMLButtonElement | null;
-  updateFallbackBtn = el.querySelector(
-    "#btn-update-download",
-  ) as HTMLButtonElement | null;
+  els.updateNudgeText.textContent = `Dostępna aktualizacja v${String(
+    res.latestVersion,
+  )}`;
+  els.updateNudgeSub.textContent = `Aktualna wersja: ${String(res.currentVersion ?? "—")}.`;
 
-  updateFallbackBtn?.addEventListener("click", async () => {
-    if (!updateFallbackUrl) return;
-    updateFallbackBtn.disabled = true;
-    try {
-      await window.api.openExternal(updateFallbackUrl);
-    } finally {
-      void window.api.quitApp();
-    }
-  });
+  const canAuto = Boolean(res.squirrelFeedUrl);
+  const canManual = Boolean(res.downloadUrl);
+  els.btnUpdateNudgeNow.disabled = !canAuto;
+  els.btnUpdateNudgeDownload.classList.toggle("d-none", !canManual || canAuto);
 
-  updatePrimaryBtn?.addEventListener("click", async () => {
-    updatePrimaryBtn.disabled = true;
-    try {
-      if (feedUrl) {
-        const started = await window.api.downloadAndInstallUpdate(feedUrl);
-        if (!started.ok) {
-          renderUpdateStatus({
-            state: "error",
-            message: started.error ?? "Failed to start updater",
-          });
-          updateFallbackBtn?.classList.remove("d-none");
-        } else {
-          renderUpdateStatus({ state: "checking" });
-        }
-      } else {
-        updateFallbackBtn?.classList.remove("d-none");
-        renderUpdateStatus({
-          state: "error",
-          message: "Auto-update not available.",
-        });
-      }
-    } finally {
-      // autoUpdater will quit+install; fallback button can quit the app
-    }
-  });
-
-  renderUpdateStatus(lastUpdateStatus);
-
-  const stop = (e: Event) => e.preventDefault();
-  window.addEventListener("keydown", stop, { capture: true });
+  renderUpdateNudgeStatus(lastUpdateStatus);
 }
+
+function startUpdatesPolling() {
+  if (updatePollTimer != null) return;
+
+  const tick = async () => {
+    if (updatePollInFlight) return;
+    updatePollInFlight = true;
+    try {
+      await checkForUpdatesAndBlock();
+    } finally {
+      updatePollInFlight = false;
+    }
+  };
+
+  void tick();
+  updatePollTimer = window.setInterval(() => {
+    void tick();
+  }, UPDATE_POLL_MS);
+}
+
+els.btnUpdateNudgeDownload?.addEventListener("click", async () => {
+  const info = updateNudgeInfo;
+  const url = info?.downloadUrl ? String(info.downloadUrl).trim() : "";
+  if (!url) return;
+
+  els.btnUpdateNudgeDownload.disabled = true;
+  try {
+    await window.api.openExternal(url);
+  } catch {
+    void 0;
+  } finally {
+    els.btnUpdateNudgeDownload.disabled = false;
+  }
+});
+
+els.btnUpdateNudgeNow?.addEventListener("click", async () => {
+  const info = updateNudgeInfo;
+  const feedUrl = info?.squirrelFeedUrl ? String(info.squirrelFeedUrl).trim() : "";
+  if (!feedUrl) return;
+
+  els.btnUpdateNudgeNow.disabled = true;
+  renderUpdateNudgeStatus({ state: "checking" });
+  try {
+    const started = await window.api.downloadAndInstallUpdate(feedUrl);
+    if (!started.ok) {
+      renderUpdateNudgeStatus({
+        state: "error",
+        message: started.error ?? "Failed to start updater",
+      });
+      if (info?.downloadUrl) els.btnUpdateNudgeDownload.classList.remove("d-none");
+    }
+  } catch (e: unknown) {
+    renderUpdateNudgeStatus({ state: "error", message: errorMessage(e) });
+    if (info?.downloadUrl) els.btnUpdateNudgeDownload.classList.remove("d-none");
+  }
+});
 
 async function checkForUpdatesAndBlock() {
   try {
     const res = await window.api.checkForUpdates();
     lastUpdateCheck = res;
-    if (!res.supported) return;
-    if (!res.updateAvailable) return;
-    if (!res.latestVersion || !res.downloadUrl) return;
-    renderUpdateBlock(
-      res.latestVersion,
-      res.downloadUrl,
-      res.currentVersion,
-      res.squirrelFeedUrl,
-    );
+    renderUpdateNudgeFromCheck(res);
   } catch {
-    // ignore
+    void 0;
   }
 }
 
@@ -3460,12 +3456,12 @@ els.btnExportFiltersClear.addEventListener("click", () => {
 if (!updateStatusUnsub) {
   updateStatusUnsub = window.api.onUpdateStatus((s) => {
     lastUpdateStatus = s;
-    renderUpdateStatus(s);
+    renderUpdateNudgeStatus(s);
   });
 }
 
 setupCopyToClipboard();
 
 void refreshMeta();
-void checkForUpdatesAndBlock();
+startUpdatesPolling();
 void refreshAppVersion();

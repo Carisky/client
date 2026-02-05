@@ -16,6 +16,19 @@
   </head>
   <body>
     <div id="app">
+      <div id="update-nudge" class="update-nudge hidden" role="region" aria-label="Aktualizacja">
+        <div class="update-nudge-left">
+          <div id="update-nudge-text" class="update-nudge-text">—</div>
+          <div id="update-nudge-sub" class="update-nudge-sub muted"></div>
+          <div id="update-nudge-progress-wrap" class="update-nudge-progress d-none" aria-hidden="true">
+            <div id="update-nudge-progress-bar" class="update-nudge-progress-bar"></div>
+          </div>
+        </div>
+        <div class="update-nudge-actions">
+          <button id="btn-update-nudge-now" class="btn btn-primary btn-sm" type="button">Zaktualizuj teraz</button>
+          <button id="btn-update-nudge-download" class="btn btn-outline-light btn-sm d-none" type="button">Pobierz ręcznie</button>
+        </div>
+      </div>
       <header class="app-header">
         <div class="app-title">
           Raport SAD <span id="app-version" class="app-version">—</span>
