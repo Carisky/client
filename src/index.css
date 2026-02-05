@@ -630,6 +630,12 @@ html[data-bs-theme="light"] .table-dark {
   white-space: nowrap;
 }
 
+.settings-value.wrap {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .divider {
   border: none;
   border-top: 1px solid var(--border);

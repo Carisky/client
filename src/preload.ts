@@ -181,6 +181,15 @@ export type AgentDzialInfo = {
   error?: string;
 };
 
+export type ResourcesSyncInfo = {
+  filePath: string;
+  exists: boolean;
+  checkedAt: string | null;
+  manifestUrl: string | null;
+  downloaded: number;
+  errors: string[];
+};
+
 export type UpdateCheckResult = {
   supported: boolean;
   updateAvailable: boolean;
@@ -221,6 +230,8 @@ contextBridge.exposeInMainWorld('api', {
   getAgentDzialInfo: (): Promise<AgentDzialInfo> => ipcRenderer.invoke('agentDzial:info'),
   clearAgentDzialMap: (): Promise<AgentDzialInfo> => ipcRenderer.invoke('agentDzial:clear'),
   showAgentDzialInFolder: (): Promise<boolean> => ipcRenderer.invoke('agentDzial:showInFolder'),
+
+  getResourcesSyncInfo: (): Promise<ResourcesSyncInfo> => ipcRenderer.invoke('resources:syncInfo'),
 
   rebuildMrnBatch: (): Promise<{ rowsInserted: number; groups: number; scannedAt: string | null }> =>
     ipcRenderer.invoke('mrnBatch:rebuild'),

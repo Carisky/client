@@ -63,7 +63,7 @@ type AgentDzialInfo = {
 };
 
 function getAgentDzialMapUserFilePath(): string {
-  return path.join(app.getPath('userData'), 'additional-data-maps.json');
+  return path.join(app.getPath('userData'), 'resources', 'additional-data-maps.json');
 }
 
 function getBundledAgentDzialMapCandidates(): string[] {
@@ -85,6 +85,7 @@ function getBundledAgentDzialMapCandidates(): string[] {
 function ensureAgentDzialMapFile(): string {
   const userFile = getAgentDzialMapUserFilePath();
   const legacyUserFile = path.join(app.getPath('userData'), 'agent-dzial-map.json');
+  const legacyUserAdditional = path.join(app.getPath('userData'), 'additional-data-maps.json');
   try {
     if (fs.existsSync(userFile)) return userFile;
   } catch {
@@ -92,6 +93,17 @@ function ensureAgentDzialMapFile(): string {
   }
 
   try {
+    // Migrate legacy additional-data-maps.json from userData root (older builds).
+    if (fs.existsSync(legacyUserAdditional)) {
+      try {
+        fs.mkdirSync(path.dirname(userFile), { recursive: true });
+        fs.copyFileSync(legacyUserAdditional, userFile);
+        return userFile;
+      } catch {
+        // ignore
+      }
+    }
+
     if (fs.existsSync(legacyUserFile)) {
       try {
         const legacyText = fs.readFileSync(legacyUserFile, 'utf8');

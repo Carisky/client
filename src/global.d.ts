@@ -8,6 +8,7 @@ import type {
   MrnBatchRows,
   RaportMeta,
   RaportPage,
+  ResourcesSyncInfo,
   UpdateCheckResult,
   UpdateStartResult,
   UpdateStatus,
@@ -39,6 +40,8 @@ declare global {
       getAgentDzialInfo: () => Promise<AgentDzialInfo>;
       clearAgentDzialMap: () => Promise<AgentDzialInfo>;
       showAgentDzialInFolder: () => Promise<boolean>;
+
+      getResourcesSyncInfo: () => Promise<ResourcesSyncInfo>;
 
       rebuildMrnBatch: () => Promise<{ rowsInserted: number; groups: number; scannedAt: string | null }>;
       getMrnBatchMeta: () => Promise<MrnBatchMeta>;

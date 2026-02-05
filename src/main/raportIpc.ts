@@ -24,6 +24,7 @@ import {
 } from './raportDb';
 import { checkForUpdates } from './appUpdate';
 import { startSquirrelUpdate } from './squirrelAutoUpdate';
+import { getResourcesSyncInfo } from './resourcesAutoFix';
 
 export function registerRaportIpc(): void {
   ipcMain.handle('raport:import', async (event) => {
@@ -67,6 +68,8 @@ export function registerRaportIpc(): void {
     shell.showItemInFolder(info.filePath);
     return true;
   });
+
+  ipcMain.handle('resources:syncInfo', async () => getResourcesSyncInfo());
 
   ipcMain.handle('clipboard:writeText', async (_evt, args: { text: string }) => {
     try {

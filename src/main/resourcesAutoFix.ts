@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -35,6 +36,16 @@ function tryReadJsonFile(filePath: string): unknown | null {
   try {
     const s = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(s) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function sha256File(filePath: string): string | null {
+  try {
+    const h = crypto.createHash('sha256');
+    h.update(fs.readFileSync(filePath));
+    return h.digest('hex');
   } catch {
     return null;
   }
@@ -202,16 +213,91 @@ export function resolveResourcePath(relPath: string): string | null {
   return resolveUserCachedResourcePath(relPath) ?? resolveBundledResourcePath(relPath);
 }
 
-function shouldDownloadToCache(params: { relPath: string; size?: number }): boolean {
-  const existing = resolveResourcePath(params.relPath);
-  if (!existing) return true;
-  if (params.size == null) return false;
+export type ResourcesSyncInfo = {
+  filePath: string;
+  exists: boolean;
+  checkedAt: string | null;
+  manifestUrl: string | null;
+  downloaded: number;
+  errors: string[];
+};
+
+export function getResourcesSyncInfo(): ResourcesSyncInfo {
+  const userRoot = getUserResourcesRoot();
+  const filePath = path.join(userRoot, 'resources-sync.json');
+
+  let exists = false;
   try {
-    const st = fs.statSync(existing);
-    return st.size !== params.size;
+    exists = fs.existsSync(filePath);
+  } catch {
+    exists = false;
+  }
+
+  if (!exists) {
+    return {
+      filePath,
+      exists: false,
+      checkedAt: null,
+      manifestUrl: null,
+      downloaded: 0,
+      errors: [],
+    };
+  }
+
+  const parsed = tryReadJsonFile(filePath);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return {
+      filePath,
+      exists: true,
+      checkedAt: null,
+      manifestUrl: null,
+      downloaded: 0,
+      errors: ['invalid_status_file'],
+    };
+  }
+
+  const rec = parsed as Record<string, unknown>;
+  const checkedAt = typeof rec.checkedAt === 'string' && rec.checkedAt.trim() ? rec.checkedAt.trim() : null;
+  const manifestUrl = typeof rec.manifestUrl === 'string' && rec.manifestUrl.trim() ? rec.manifestUrl.trim() : null;
+  const downloaded = Array.isArray(rec.downloaded) ? rec.downloaded.length : 0;
+  const errors = Array.isArray(rec.errors)
+    ? rec.errors.map((e) => String(e ?? '').trim()).filter(Boolean).slice(0, 30)
+    : [];
+
+  return { filePath, exists: true, checkedAt, manifestUrl, downloaded, errors };
+}
+
+function shouldDownloadToCache(params: {
+  relPath: string;
+  size?: number;
+  sha256?: string;
+  userRoot: string;
+}): boolean {
+  const outPath = safeJoin(params.userRoot, params.relPath);
+  if (!outPath) return false;
+
+  try {
+    if (!fs.existsSync(outPath)) return true;
   } catch {
     return true;
   }
+
+  if (params.size != null) {
+    try {
+      const st = fs.statSync(outPath);
+      if (st.size !== params.size) return true;
+    } catch {
+      return true;
+    }
+  }
+
+  if (params.sha256) {
+    const localSha = sha256File(outPath);
+    if (!localSha) return true;
+    if (localSha.toLowerCase() !== params.sha256.toLowerCase()) return true;
+  }
+
+  return false;
 }
 
 function safeJoin(root: string, relPosix: string): string | null {
@@ -244,6 +330,19 @@ export async function autoFixResourcesOnStartup(): Promise<void> {
     // ignore
   }
 
+  const statusPath = path.join(userRoot, 'resources-sync.json');
+  const status: {
+    checkedAt: string;
+    manifestUrl: string;
+    downloaded: string[];
+    errors: string[];
+  } = {
+    checkedAt: new Date().toISOString(),
+    manifestUrl: resourcesManifestUrl,
+    downloaded: [],
+    errors: [],
+  };
+
   const u = new URL(resourcesManifestUrl);
   u.searchParams.set('_ts', String(Date.now()));
 
@@ -251,11 +350,25 @@ export async function autoFixResourcesOnStartup(): Promise<void> {
   try {
     payload = await fetchJson(u.toString(), 4500);
   } catch {
+    try {
+      status.errors.push('manifest_fetch_failed');
+      fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n', 'utf8');
+    } catch {
+      void 0;
+    }
     return;
   }
 
   const files = extractFiles(payload);
-  if (!files.length) return;
+  if (!files.length) {
+    try {
+      status.errors.push('manifest_empty');
+      fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n', 'utf8');
+    } catch {
+      void 0;
+    }
+    return;
+  }
 
   // Compute base URL from manifest URL directory.
   const resourcesRootUrl = new URL(baseUrl.toString());
@@ -263,7 +376,15 @@ export async function autoFixResourcesOnStartup(): Promise<void> {
   resourcesRootUrl.pathname = resourcesRootUrl.pathname.replace(/\\/g, '/').replace(/[^/]+$/, '');
 
   for (const f of files) {
-    if (!shouldDownloadToCache({ relPath: f.path, size: f.size })) continue;
+    if (
+      !shouldDownloadToCache({
+        relPath: f.path,
+        size: f.size,
+        sha256: f.sha256,
+        userRoot,
+      })
+    )
+      continue;
 
     const outPath = safeJoin(userRoot, f.path);
     if (!outPath) continue;
@@ -291,9 +412,27 @@ export async function autoFixResourcesOnStartup(): Promise<void> {
 
       const tmp = `${outPath}.tmp`;
       fs.writeFileSync(tmp, bin);
+      if (f.sha256) {
+        const got = sha256File(tmp);
+        if (!got || got.toLowerCase() !== f.sha256.toLowerCase()) {
+          try {
+            fs.rmSync(tmp, { force: true });
+          } catch {
+            void 0;
+          }
+          continue;
+        }
+      }
       fs.renameSync(tmp, outPath);
+      status.downloaded.push(f.path);
     } catch {
       // ignore
     }
+  }
+
+  try {
+    fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n', 'utf8');
+  } catch {
+    void 0;
   }
 }

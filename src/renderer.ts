@@ -194,6 +194,13 @@ const els = {
   btnAgentDzialClear: document.getElementById(
     "btn-agent-dzial-clear",
   ) as HTMLButtonElement,
+
+  resourcesSyncMeta: document.getElementById(
+    "resources-sync-meta",
+  ) as HTMLElement,
+  resourcesSyncStatus: document.getElementById(
+    "resources-sync-status",
+  ) as HTMLElement,
 };
 
 const state = {
@@ -747,6 +754,7 @@ function renderAgentDzialMetaText(info: {
 
 async function refreshAgentDzialUi(): Promise<void> {
   setStatus(els.agentDzialStatus, "");
+  setStatus(els.resourcesSyncStatus, "");
   try {
     const info = await window.api.getAgentDzialInfo();
     els.agentDzialMeta.textContent = renderAgentDzialMetaText(info);
@@ -755,6 +763,52 @@ async function refreshAgentDzialUi(): Promise<void> {
     els.agentDzialMeta.textContent = "—";
     els.btnAgentDzialClear.disabled = true;
     setStatus(els.agentDzialStatus, `Błąd: ${errorMessage(e)}`);
+  }
+}
+
+function renderResourcesSyncMetaText(info: {
+  filePath: string;
+  exists: boolean;
+  checkedAt: string | null;
+  manifestUrl: string | null;
+  downloaded: number;
+  errors: string[];
+} | null): string {
+  if (!info) return "-";
+  if (!info.exists) return `Brak danych | ${info.filePath}`;
+  const checked = info.checkedAt
+    ? new Date(info.checkedAt).toLocaleString("pl-PL")
+    : "-";
+  const downloaded = Number(info.downloaded ?? 0);
+  const errCount = Array.isArray(info.errors) ? info.errors.length : 0;
+  return `Ostatnia kontrola: ${checked} | Pobrano: ${downloaded} | Bledy: ${errCount}`;
+}
+
+async function refreshResourcesSyncUi(): Promise<void> {
+  setStatus(els.resourcesSyncStatus, "");
+  try {
+    const info = await window.api.getResourcesSyncInfo();
+    els.resourcesSyncMeta.textContent = renderResourcesSyncMetaText(info);
+    const details = [
+      info.manifestUrl ? `manifest=${info.manifestUrl}` : "",
+      info.errors?.length ? `errors=${info.errors.join(", ")}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    els.resourcesSyncMeta.title =
+      info.filePath + (details ? `\n${details}` : "");
+    if (info.errors?.length) {
+      setStatus(
+        els.resourcesSyncStatus,
+        `Bledy: ${info.errors.slice(0, 6).join(", ")}${
+          info.errors.length > 6 ? "..." : ""
+        }`,
+      );
+    }
+  } catch (e: unknown) {
+    els.resourcesSyncMeta.textContent = "-";
+    els.resourcesSyncMeta.title = "";
+    setStatus(els.resourcesSyncStatus, `Error: ${errorMessage(e)}`);
   }
 }
 
@@ -767,6 +821,7 @@ async function refreshSettings() {
     els.dbPath.textContent =
       db.filePath + (db.exists ? "" : " (nie utworzono)");
     await refreshAgentDzialUi();
+    await refreshResourcesSyncUi();
   } catch (e: unknown) {
     els.dbPath.textContent = "—";
     setStatus(els.settingsStatus, `Błąd: ${errorMessage(e)}`);
