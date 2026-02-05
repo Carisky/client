@@ -45,6 +45,9 @@ function tryReadJsonFile(filePath: string): unknown | null {
 function resolveUpdateConfigPath(): string | null {
   const candidates: string[] = [];
 
+  // User cache (downloaded resources)
+  candidates.push(path.resolve(app.getPath('userData'), 'resources', 'update.json'));
+
   // Dev: run from client/
   candidates.push(path.resolve(process.cwd(), 'resources', 'update.json'));
 

@@ -166,6 +166,10 @@ function sha256(filePath) {
   return h.digest('hex');
 }
 
+function toPosixPath(p) {
+  return String(p || '').replace(/\\/g, '/');
+}
+
 function ensureDir(p) {
   fs.mkdirSync(p, { recursive: true });
 }
@@ -173,6 +177,34 @@ function ensureDir(p) {
 function writeJson(filePath, value) {
   ensureDir(path.dirname(filePath));
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2) + '\n', 'utf8');
+}
+
+function writeResourcesManifest({ root, version, branch }) {
+  const resDir = path.join(root, 'resources');
+  if (!fs.existsSync(resDir)) return;
+
+  const outPath = path.join(resDir, 'resources-manifest.json');
+  const all = walk(resDir);
+  const files = all
+    .filter((p) => fs.existsSync(p) && fs.statSync(p).isFile())
+    .filter((p) => path.resolve(p) !== path.resolve(outPath));
+
+  const entries = files
+    .map((absPath) => {
+      const rel = toPosixPath(path.relative(resDir, absPath));
+      const st = fs.statSync(absPath);
+      return { path: rel, size: st.size, sha256: sha256(absPath) };
+    })
+    .filter((e) => e.path && !e.path.startsWith('../') && !path.isAbsolute(e.path))
+    .sort((a, b) => a.path.localeCompare(b.path));
+
+  writeJson(outPath, {
+    formatVersion: 1,
+    version,
+    channel: branch,
+    generatedAt: new Date().toISOString(),
+    files: entries,
+  });
 }
 
 async function main() {
@@ -196,8 +228,10 @@ async function main() {
 
   const rawBase = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${branch}`;
   const manifestUrl = `${rawBase}/releases/latest.json`;
+  const resourcesManifestUrl = `${rawBase}/resources/resources-manifest.json`;
   // Ensure packaged app contains correct update config (extraResource is captured during packaging).
-  writeJson(path.join(root, 'resources', 'update.json'), { manifestUrl });
+  writeJson(path.join(root, 'resources', 'update.json'), { manifestUrl, resourcesManifestUrl });
+  writeResourcesManifest({ root, version, branch });
 
   // Guard: don't accidentally move "latest" backwards.
   const latestPath = path.join(root, 'releases', 'latest.json');
@@ -282,7 +316,7 @@ async function main() {
   writeJson(path.join(root, 'releases', 'latest.json'), manifest);
 
   console.log(`Publishing manifests to branch "${branch}"...`);
-  execInherit(`git add releases/latest.json releases/v${version}/manifest.json resources/update.json`, { cwd: root });
+  execInherit(`git add releases/latest.json releases/v${version}/manifest.json resources`, { cwd: root });
 
   const status = exec('git status --porcelain', { cwd: root });
   if (!status) {

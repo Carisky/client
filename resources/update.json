@@ -1,3 +1,4 @@
 {
-  "manifestUrl": "https://raw.githubusercontent.com/Carisky/client/master/releases/latest.json"
+  "manifestUrl": "https://raw.githubusercontent.com/Carisky/client/master/releases/latest.json",
+  "resourcesManifestUrl": "https://raw.githubusercontent.com/Carisky/client/master/resources/resources-manifest.json"
 }
