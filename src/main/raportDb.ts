@@ -1793,6 +1793,261 @@ function addJsonTable(ws: xlsx.WorkSheet, rows: Array<Record<string, unknown>>, 
   return row1 + rows.length + 1;
 }
 
+type ValidationExportLayout = 'grouped' | 'separate';
+type ValidationExportContent = 'full' | 'summary' | 'errors';
+type ValidationExportColumns = 'full' | 'compact';
+
+type NormalizedValidationExportOptions = {
+  layout: ValidationExportLayout;
+  content: ValidationExportContent;
+  columns: ValidationExportColumns;
+};
+
+function normalizeValidationExportOptions(raw: unknown): NormalizedValidationExportOptions {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const layout: ValidationExportLayout = r.layout === 'grouped' || r.layout === 'separate' ? r.layout : 'separate';
+  const content: ValidationExportContent = r.content === 'full' || r.content === 'summary' || r.content === 'errors' ? r.content : 'full';
+  const columns: ValidationExportColumns = r.columns === 'full' || r.columns === 'compact' ? r.columns : 'full';
+  return { layout, content, columns };
+}
+
+type ExportTableId = 'osobySummary' | 'osobyErrors' | 'dniSummary' | 'dniItems' | 'grupySummary' | 'grupyItems';
+
+const EXPORT_TABLE_TITLES: Record<ExportTableId, { title: string; sheet: string; description: string }> = {
+  osobySummary: { title: 'Osoby (podsumowanie)', sheet: 'Osoby_summary', description: 'Podsumowanie bledow / odchylen per agent' },
+  osobyErrors: { title: 'Osoby (lista bledow / odchylen)', sheet: 'Osoby_bledy', description: 'Lista pozycji z odchyleniem (outliery IQR)' },
+  dniSummary: { title: 'Dni (podsumowanie)', sheet: 'Dni_summary', description: 'Podsumowanie per dzien / bucket' },
+  dniItems: { title: 'Dni (pozycje)', sheet: 'Dni_pozycje', description: 'Wszystkie pozycje z obliczeniami IQR per bucket' },
+  grupySummary: { title: 'Grupy (podsumowanie)', sheet: 'Grupy_summary', description: 'Podsumowanie grup (klucz: odbiorca/kod/waluta...)' },
+  grupyItems: { title: 'Grupy (pozycje)', sheet: 'Grupy_pozycje', description: 'Pozycje z obliczeniami IQR w rozbiciu na grupy' },
+};
+
+const EXPORT_HEADERS: Record<ExportTableId, { full: string[]; compact: string[] }> = {
+  osobySummary: { full: ['Agent', 'Dzial', 'Errors', 'High', 'Low'], compact: ['Agent', 'Dzial', 'Errors', 'High', 'Low'] },
+  osobyErrors: {
+    full: [
+      'Agent',
+      'Dzial',
+      'DataMRN',
+      'MRN',
+      'NrSAD',
+      'Odbiorca',
+      'KodTowaru',
+      'Waluta',
+      'KursWaluty',
+      'WarunkiDostawy',
+      'KrajWysylki',
+      'TransportRodzaj',
+      'OplatyCelneRazem',
+      'MasaNetto',
+      'Coef',
+      'Side',
+      'Limit',
+      'Q1',
+      'Q3',
+      'IQR',
+      'Lower',
+      'Upper',
+      'DiscrepancyPct',
+    ],
+    compact: [
+      'Agent',
+      'Dzial',
+      'DataMRN',
+      'MRN',
+      'NrSAD',
+      'Odbiorca',
+      'KodTowaru',
+      'Waluta',
+      'KursWaluty',
+      'OplatyCelneRazem',
+      'MasaNetto',
+      'Coef',
+      'Side',
+      'Limit',
+      'DiscrepancyPct',
+    ],
+  },
+  dniSummary: {
+    full: ['DateStart', 'DateEnd', 'Total', 'OutliersHigh', 'OutliersLow', 'Singles'],
+    compact: ['DateStart', 'DateEnd', 'Total', 'OutliersHigh', 'OutliersLow', 'Singles'],
+  },
+  dniItems: {
+    full: [
+      'BucketStart',
+      'BucketEnd',
+      'DataMRN',
+      'MRN',
+      'NrSAD',
+      'Agent',
+      'Dzial',
+      'Odbiorca',
+      'KodTowaru',
+      'Waluta',
+      'KursWaluty',
+      'WarunkiDostawy',
+      'KrajWysylki',
+      'TransportRodzaj',
+      'OplatyCelneRazem',
+      'MasaNetto',
+      'Coef',
+      'ManualVerified',
+      'Checkable',
+      'OutlierSide',
+      'Limit',
+      'Q1',
+      'Q3',
+      'IQR',
+      'Lower',
+      'Upper',
+      'DiscrepancyPct',
+      'RowId',
+    ],
+    compact: [
+      'BucketStart',
+      'BucketEnd',
+      'DataMRN',
+      'MRN',
+      'NrSAD',
+      'Agent',
+      'Dzial',
+      'OplatyCelneRazem',
+      'MasaNetto',
+      'Coef',
+      'ManualVerified',
+      'OutlierSide',
+      'Limit',
+      'DiscrepancyPct',
+      'RowId',
+    ],
+  },
+  grupySummary: {
+    full: ['Count', 'Odbiorca', 'KodTowaru', 'Waluta', 'KursWaluty', 'WarunkiDostawy', 'KrajWysylki', 'TransportRodzaj'],
+    compact: ['Count', 'Odbiorca', 'KodTowaru', 'Waluta', 'KursWaluty', 'WarunkiDostawy', 'KrajWysylki', 'TransportRodzaj'],
+  },
+  grupyItems: {
+    full: [
+      'Odbiorca',
+      'KodTowaru',
+      'Waluta',
+      'KursWaluty',
+      'WarunkiDostawy',
+      'KrajWysylki',
+      'TransportRodzaj',
+      'BucketStart',
+      'BucketEnd',
+      'DataMRN',
+      'MRN',
+      'NrSAD',
+      'Agent',
+      'Dzial',
+      'OplatyCelneRazem',
+      'MasaNetto',
+      'Coef',
+      'ManualVerified',
+      'Checkable',
+      'OutlierSide',
+      'Limit',
+      'Q1',
+      'Q3',
+      'IQR',
+      'Lower',
+      'Upper',
+      'DiscrepancyPct',
+      'RowId',
+    ],
+    compact: [
+      'Odbiorca',
+      'KodTowaru',
+      'Waluta',
+      'KursWaluty',
+      'WarunkiDostawy',
+      'KrajWysylki',
+      'TransportRodzaj',
+      'BucketStart',
+      'BucketEnd',
+      'DataMRN',
+      'MRN',
+      'NrSAD',
+      'Agent',
+      'Dzial',
+      'OplatyCelneRazem',
+      'MasaNetto',
+      'Coef',
+      'ManualVerified',
+      'OutlierSide',
+      'Limit',
+      'DiscrepancyPct',
+      'RowId',
+    ],
+  },
+};
+
+function projectRowsByHeaders(rows: Array<Record<string, unknown>>, headers: string[]): Array<Record<string, unknown>> {
+  return rows.map((r) => {
+    const out: Record<string, unknown> = {};
+    for (const h of headers) out[h] = r[h];
+    return out;
+  });
+}
+
+function addJsonTableWithHeader(ws: xlsx.WorkSheet, rows: Array<Record<string, unknown>>, row1: number, headers: string[]): number {
+  if (!rows.length) {
+    xlsx.utils.sheet_add_aoa(ws, [['Brak danych']], { origin: a1(row1, 0) });
+    return row1 + 1;
+  }
+  xlsx.utils.sheet_add_json(ws, rows, { origin: a1(row1, 0), header: headers, skipHeader: false });
+  return row1 + rows.length + 1;
+}
+
+function computeCols(rows: Array<Record<string, unknown>>, headers: string[]): Array<{ wch: number }> {
+  const maxLens = headers.map((h) => Math.max(6, String(h ?? '').length));
+  const sample = rows.slice(0, 200);
+  for (const r of sample) {
+    for (let i = 0; i < headers.length; i++) {
+      const h = headers[i];
+      const v = r[h];
+      if (v == null) continue;
+      const s = typeof v === 'string' ? v : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v);
+      maxLens[i] = Math.max(maxLens[i], s.length);
+    }
+  }
+  return maxLens.map((n) => ({ wch: Math.max(10, Math.min(60, n + 2)) }));
+}
+
+function applyTableDefaults(ws: xlsx.WorkSheet, rows: Array<Record<string, unknown>>, headers: string[]): void {
+  if (!rows.length) {
+    ws['!cols'] = [{ wch: 18 }];
+    return;
+  }
+  if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] };
+  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+  ws['!cols'] = computeCols(rows, headers);
+}
+
+function safeSheetName(raw: string, used: Set<string>): string {
+  const cleaned = String(raw ?? '')
+    .replace(/[\][:*?/\\[]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const base = (cleaned || 'Sheet').slice(0, 31);
+  if (!used.has(base)) {
+    used.add(base);
+    return base;
+  }
+  for (let i = 2; i < 1000; i++) {
+    const suffix = ` ${i}`;
+    const name = `${base.slice(0, Math.max(1, 31 - suffix.length))}${suffix}`;
+    if (!used.has(name)) {
+      used.add(name);
+      return name;
+    }
+  }
+  const fallback = `${base.slice(0, 28)}...`;
+  used.add(fallback);
+  return fallback;
+}
+
 type ValidationExportPreviewSection = {
   title: string;
   rows: Array<Record<string, unknown>>;
@@ -1823,9 +2078,13 @@ export async function previewValidationWynikiExport(params: {
     agent?: string[] | string | null;
     dzial?: string | null;
   };
+  exportOptions?: unknown;
   limit?: number;
 }): Promise<ValidationExportPreview> {
   const limit = Number.isFinite(Number(params.limit)) ? Math.max(10, Math.min(500, Number(params.limit))) : 200;
+  const exportOptionsRaw = normalizeValidationExportOptions(params.exportOptions);
+  const exportOptions =
+    exportOptionsRaw.layout === 'grouped' ? { ...exportOptionsRaw, content: 'full' as const, columns: 'full' as const } : exportOptionsRaw;
 
   const client = await getPrisma();
   const range = toYmdRange(params.period);
@@ -2169,12 +2428,53 @@ export async function previewValidationWynikiExport(params: {
 
   const meta = metaRows.map(([k, v]) => ({ key: String(k), value: v == null ? '' : String(v) }));
 
-  const osobySummaryTake = take(osobySummary);
-  const osobyErrorsTake = take(osobyErrors);
-  const dniSummaryTake = take(dniSummary);
-  const dniItemsTake = take(dniItems);
-  const grupySummaryTake = take(grupySummary);
-  const grupyItemsTake = take(grupyItems);
+  const include: Record<ExportTableId, boolean> =
+    exportOptions.content === 'summary'
+      ? { osobySummary: true, osobyErrors: false, dniSummary: true, dniItems: false, grupySummary: true, grupyItems: false }
+      : exportOptions.content === 'errors'
+        ? { osobySummary: true, osobyErrors: true, dniSummary: false, dniItems: false, grupySummary: false, grupyItems: false }
+        : { osobySummary: true, osobyErrors: true, dniSummary: true, dniItems: true, grupySummary: true, grupyItems: true };
+
+  const preset = exportOptions.columns === 'compact' ? 'compact' : 'full';
+  const tables: Record<ExportTableId, { rows: Array<Record<string, unknown>>; totalRows: number; truncated: boolean }> = {
+    osobySummary: take(projectRowsByHeaders(osobySummary, EXPORT_HEADERS.osobySummary[preset])),
+    osobyErrors: take(projectRowsByHeaders(osobyErrors, EXPORT_HEADERS.osobyErrors[preset])),
+    dniSummary: take(projectRowsByHeaders(dniSummary, EXPORT_HEADERS.dniSummary[preset])),
+    dniItems: take(projectRowsByHeaders(dniItems, EXPORT_HEADERS.dniItems[preset])),
+    grupySummary: take(projectRowsByHeaders(grupySummary, EXPORT_HEADERS.grupySummary[preset])),
+    grupyItems: take(projectRowsByHeaders(grupyItems, EXPORT_HEADERS.grupyItems[preset])),
+  };
+
+  const groupedSheets: ValidationExportPreviewSheet[] = [
+    {
+      name: 'Osoby',
+      sections: [
+        ...(include.osobySummary ? [{ title: EXPORT_TABLE_TITLES.osobySummary.title, ...tables.osobySummary }] : []),
+        ...(include.osobyErrors ? [{ title: EXPORT_TABLE_TITLES.osobyErrors.title, ...tables.osobyErrors }] : []),
+      ],
+    },
+    {
+      name: 'Dni',
+      sections: [
+        ...(include.dniSummary ? [{ title: EXPORT_TABLE_TITLES.dniSummary.title, ...tables.dniSummary }] : []),
+        ...(include.dniItems ? [{ title: EXPORT_TABLE_TITLES.dniItems.title, ...tables.dniItems }] : []),
+      ],
+    },
+    {
+      name: 'Grupy',
+      sections: [
+        ...(include.grupySummary ? [{ title: EXPORT_TABLE_TITLES.grupySummary.title, ...tables.grupySummary }] : []),
+        ...(include.grupyItems ? [{ title: EXPORT_TABLE_TITLES.grupyItems.title, ...tables.grupyItems }] : []),
+      ],
+    },
+  ].filter((s) => s.sections.length > 0);
+
+  const separateSheets: ValidationExportPreviewSheet[] = (Object.keys(include) as ExportTableId[])
+    .filter((id) => include[id])
+    .map((id) => ({
+      name: EXPORT_TABLE_TITLES[id].sheet,
+      sections: [{ title: EXPORT_TABLE_TITLES[id].title, ...tables[id] }],
+    }));
 
   return {
     period: params.period,
@@ -2182,29 +2482,7 @@ export async function previewValidationWynikiExport(params: {
     range,
     availableAgents,
     meta,
-    sheets: [
-      {
-        name: 'Osoby',
-        sections: [
-          { title: 'Osoby (podsumowanie)', ...osobySummaryTake },
-          { title: 'Osoby (lista bledow / odchylen)', ...osobyErrorsTake },
-        ],
-      },
-      {
-        name: 'Dni',
-        sections: [
-          { title: 'Dni (podsumowanie)', ...dniSummaryTake },
-          { title: 'Dni (pozycje)', ...dniItemsTake },
-        ],
-      },
-      {
-        name: 'Grupy',
-        sections: [
-          { title: 'Grupy (podsumowanie)', ...grupySummaryTake },
-          { title: 'Grupy (pozycje)', ...grupyItemsTake },
-        ],
-      },
-    ],
+    sheets: exportOptions.layout === 'grouped' ? groupedSheets : separateSheets,
   };
 }
 
@@ -2217,8 +2495,10 @@ export async function exportValidationWynikiToXlsx(params: {
     agent?: string[] | string | null;
     dzial?: string | null;
   };
+  exportOptions?: unknown;
   filePath: string;
 }): Promise<{ ok: true }> {
+  const exportOptions = normalizeValidationExportOptions(params.exportOptions);
   const client = await getPrisma();
   const range = toYmdRange(params.period);
   const { grouping } = getValidationGroupingConfig(params);
@@ -2395,6 +2675,218 @@ export async function exportValidationWynikiToXlsx(params: {
     ['ManualVerified', stats.verifiedManual],
     ['ItemsTotal', base.length],
   ];
+
+  if (exportOptions.layout === 'separate') {
+    const include: Record<ExportTableId, boolean> =
+      exportOptions.content === 'summary'
+        ? { osobySummary: true, osobyErrors: false, dniSummary: true, dniItems: false, grupySummary: true, grupyItems: false }
+        : exportOptions.content === 'errors'
+          ? { osobySummary: true, osobyErrors: true, dniSummary: false, dniItems: false, grupySummary: false, grupyItems: false }
+          : { osobySummary: true, osobyErrors: true, dniSummary: true, dniItems: true, grupySummary: true, grupyItems: true };
+
+    const preset = exportOptions.columns === 'compact' ? 'compact' : 'full';
+
+    const osobySummary = agents.map((a) => ({ Agent: a.agent, Dzial: a.dzial ?? '', Errors: a.total, High: a.high, Low: a.low }));
+    const osobyErrors = outliers.map((o) => {
+      const b = o.bound as ValidationIqrBounds | null;
+      const key = o.key;
+      return {
+        Agent: String(o.agent_celny ?? '').trim() || 'вЂ”',
+        Dzial: o.dzial ?? '',
+        DataMRN: o.data_mrn,
+        MRN: o.numer_mrn,
+        NrSAD: o.nr_sad,
+        Odbiorca: key?.odbiorca ?? '',
+        KodTowaru: key?.kod_towaru ?? '',
+        Waluta: key?.waluta ?? '',
+        KursWaluty: key?.kurs_waluty ?? '',
+        WarunkiDostawy: key?.warunki_dostawy ?? '',
+        KrajWysylki: key?.kraj_wysylki ?? '',
+        TransportRodzaj: key?.transport_na_granicy_rodzaj ?? '',
+        OplatyCelneRazem: o.fees,
+        MasaNetto: o.mass,
+        Coef: o.coef,
+        Side: o.outlierSide,
+        Limit: o.limit,
+        Q1: b?.q1 ?? null,
+        Q3: b?.q3 ?? null,
+        IQR: b?.iqr ?? null,
+        Lower: b?.lower ?? null,
+        Upper: b?.upper ?? null,
+        DiscrepancyPct: o.discrepancyPct,
+      };
+    });
+
+    const dniSummary = days.map((d) => ({
+      DateStart: d.date,
+      DateEnd: d.end,
+      Total: d.total,
+      OutliersHigh: d.outliersHigh,
+      OutliersLow: d.outliersLow,
+      Singles: d.singles,
+    }));
+
+    const dniItems = base
+      .slice()
+      .sort(
+        (a, b) =>
+          String(a.bucketStart ?? '').localeCompare(String(b.bucketStart ?? '')) ||
+          String(a.outlierSide ?? '').localeCompare(String(b.outlierSide ?? '')) ||
+          String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+          String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+      )
+      .map((it) => {
+        const b = bounds.get(it._boundsKey) ?? null;
+        const limit = it.outlierSide ? (b ? (it.outlierSide === 'high' ? b.upper : b.lower) : null) : null;
+        const discrepancyPct =
+          it.outlierSide && it.coef != null && Number.isFinite(it.coef) && limit != null
+            ? computeDiscrepancyPct(it.coef, limit)
+            : null;
+        const key = it.key;
+        return {
+          BucketStart: it.bucketStart,
+          BucketEnd: it.bucketEnd,
+          DataMRN: it.data_mrn,
+          MRN: it.numer_mrn,
+          NrSAD: it.nr_sad,
+          Agent: it.agent_celny,
+          Dzial: it.dzial,
+          Odbiorca: key?.odbiorca ?? '',
+          KodTowaru: key?.kod_towaru ?? '',
+          Waluta: key?.waluta ?? '',
+          KursWaluty: key?.kurs_waluty ?? '',
+          WarunkiDostawy: key?.warunki_dostawy ?? '',
+          KrajWysylki: key?.kraj_wysylki ?? '',
+          TransportRodzaj: key?.transport_na_granicy_rodzaj ?? '',
+          OplatyCelneRazem: it.fees,
+          MasaNetto: it.mass,
+          Coef: it.coef,
+          ManualVerified: it.verifiedManual,
+          Checkable: it.checkable,
+          OutlierSide: it.outlierSide,
+          Limit: limit,
+          Q1: b?.q1 ?? null,
+          Q3: b?.q3 ?? null,
+          IQR: b?.iqr ?? null,
+          Lower: b?.lower ?? null,
+          Upper: b?.upper ?? null,
+          DiscrepancyPct: discrepancyPct,
+          RowId: it.rowId,
+        };
+      });
+
+    const grupySummary = groups.map((g) => ({
+      Count: g.count,
+      Odbiorca: g.key.odbiorca,
+      KodTowaru: g.key.kod_towaru,
+      Waluta: g.key.waluta,
+      KursWaluty: g.key.kurs_waluty,
+      WarunkiDostawy: g.key.warunki_dostawy,
+      KrajWysylki: g.key.kraj_wysylki,
+      TransportRodzaj: g.key.transport_na_granicy_rodzaj,
+    }));
+
+    const grupyItems = base
+      .slice()
+      .sort(
+        (a, b) =>
+          JSON.stringify(a.key).localeCompare(JSON.stringify(b.key)) ||
+          String(a.bucketStart ?? '').localeCompare(String(b.bucketStart ?? '')) ||
+          String(a.data_mrn ?? '').localeCompare(String(b.data_mrn ?? '')) ||
+          String(a.numer_mrn ?? '').localeCompare(String(b.numer_mrn ?? '')),
+      )
+      .map((it) => {
+        const b = bounds.get(it._boundsKey) ?? null;
+        const limit = it.outlierSide ? (b ? (it.outlierSide === 'high' ? b.upper : b.lower) : null) : null;
+        const discrepancyPct =
+          it.outlierSide && it.coef != null && Number.isFinite(it.coef) && limit != null
+            ? computeDiscrepancyPct(it.coef, limit)
+            : null;
+        const key = it.key;
+        return {
+          Odbiorca: key?.odbiorca ?? '',
+          KodTowaru: key?.kod_towaru ?? '',
+          Waluta: key?.waluta ?? '',
+          KursWaluty: key?.kurs_waluty ?? '',
+          WarunkiDostawy: key?.warunki_dostawy ?? '',
+          KrajWysylki: key?.kraj_wysylki ?? '',
+          TransportRodzaj: key?.transport_na_granicy_rodzaj ?? '',
+          BucketStart: it.bucketStart,
+          BucketEnd: it.bucketEnd,
+          DataMRN: it.data_mrn,
+          MRN: it.numer_mrn,
+          NrSAD: it.nr_sad,
+          Agent: it.agent_celny,
+          Dzial: it.dzial,
+          OplatyCelneRazem: it.fees,
+          MasaNetto: it.mass,
+          Coef: it.coef,
+          ManualVerified: it.verifiedManual,
+          Checkable: it.checkable,
+          OutlierSide: it.outlierSide,
+          Limit: limit,
+          Q1: b?.q1 ?? null,
+          Q3: b?.q3 ?? null,
+          IQR: b?.iqr ?? null,
+          Lower: b?.lower ?? null,
+          Upper: b?.upper ?? null,
+          DiscrepancyPct: discrepancyPct,
+          RowId: it.rowId,
+        };
+      });
+
+    const tableRows: Record<ExportTableId, Array<Record<string, unknown>>> = {
+      osobySummary: projectRowsByHeaders(osobySummary, EXPORT_HEADERS.osobySummary[preset]),
+      osobyErrors: projectRowsByHeaders(osobyErrors, EXPORT_HEADERS.osobyErrors[preset]),
+      dniSummary: projectRowsByHeaders(dniSummary, EXPORT_HEADERS.dniSummary[preset]),
+      dniItems: projectRowsByHeaders(dniItems, EXPORT_HEADERS.dniItems[preset]),
+      grupySummary: projectRowsByHeaders(grupySummary, EXPORT_HEADERS.grupySummary[preset]),
+      grupyItems: projectRowsByHeaders(grupyItems, EXPORT_HEADERS.grupyItems[preset]),
+    };
+
+    const usedSheetNames = new Set<string>();
+    const metaSheetName = safeSheetName('Meta', usedSheetNames);
+
+    const tableOrder: ExportTableId[] = ['osobySummary', 'osobyErrors', 'dniSummary', 'dniItems', 'grupySummary', 'grupyItems'];
+    const plannedSheets = tableOrder
+      .filter((id) => include[id])
+      .map((id) => ({
+        id,
+        name: safeSheetName(EXPORT_TABLE_TITLES[id].sheet, usedSheetNames),
+      }));
+
+    const wb = xlsx.utils.book_new();
+
+    const wsMeta = xlsx.utils.aoa_to_sheet([]);
+    let r1 = 1;
+    r1 = addSectionTitle(wsMeta, 'Meta', r1);
+    r1 = addKeyValueMeta(wsMeta, metaRows, r1);
+    r1 += 1;
+    r1 = addSectionTitle(wsMeta, 'Arkusze', r1);
+    const sheetIndex = plannedSheets.map((s) => ({
+      Sheet: s.name,
+      Title: EXPORT_TABLE_TITLES[s.id].title,
+      Rows: tableRows[s.id].length,
+      Description: EXPORT_TABLE_TITLES[s.id].description,
+    }));
+    addJsonTableWithHeader(wsMeta, sheetIndex, r1, ['Sheet', 'Title', 'Rows', 'Description']);
+    wsMeta['!cols'] = [{ wch: 22 }, { wch: 44 }, { wch: 10 }, { wch: 60 }];
+    xlsx.utils.book_append_sheet(wb, wsMeta, metaSheetName);
+
+    for (const s of plannedSheets) {
+      const id = s.id;
+      const headers = EXPORT_HEADERS[id][preset];
+      const rows = tableRows[id];
+      const ws = xlsx.utils.aoa_to_sheet([]);
+      addJsonTableWithHeader(ws, rows, 1, headers);
+      applyTableDefaults(ws, rows, headers);
+      xlsx.utils.book_append_sheet(wb, ws, s.name);
+    }
+
+    fs.mkdirSync(path.dirname(params.filePath), { recursive: true });
+    xlsx.writeFile(wb, params.filePath, { bookType: 'xlsx', compression: true });
+    return { ok: true };
+  }
 
   const wb = xlsx.utils.book_new();
 

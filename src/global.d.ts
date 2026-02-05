@@ -14,6 +14,7 @@ import type {
   ValidationDashboard,
   ValidationDayFilter,
   ValidationDayItems,
+  ValidationExportOptions,
   ValidationExportFilters,
   ValidationGroupingOptions,
   ValidationGroupKey,
@@ -56,12 +57,14 @@ declare global {
         mrn?: string,
         options?: ValidationGroupingOptions,
         filters?: ValidationExportFilters,
+        exportOptions?: ValidationExportOptions,
       ) => Promise<ValidationExportResult>;
       previewValidationExport: (
         period: string,
         mrn?: string,
         options?: ValidationGroupingOptions,
         filters?: ValidationExportFilters,
+        exportOptions?: ValidationExportOptions,
       ) => Promise<ValidationExportPreviewResult>;
 
       writeClipboardText: (text: string) => Promise<{ ok: boolean; error?: string }>;

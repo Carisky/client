@@ -140,6 +140,9 @@ const els = {
   exportMonth: document.getElementById("export-month") as HTMLInputElement,
   exportYear: document.getElementById("export-year") as HTMLInputElement,
   exportGrouping: document.getElementById("export-grouping") as HTMLSelectElement,
+  exportLayout: document.getElementById("export-layout") as HTMLSelectElement,
+  exportContent: document.getElementById("export-content") as HTMLSelectElement,
+  exportColumns: document.getElementById("export-columns") as HTMLSelectElement,
   exportMrnFilter: document.getElementById("export-mrn-filter") as HTMLInputElement,
   exportTableSearch: document.getElementById(
     "export-table-search",
@@ -1055,6 +1058,63 @@ type ValidationDateGrouping =
 const VALIDATION_GROUPING_STORAGE_KEY = "validationGrouping";
 const ATTENTION_GROUPING_STORAGE_KEY = "attentionGrouping";
 const EXPORT_GROUPING_STORAGE_KEY = "exportGrouping";
+const EXPORT_LAYOUT_STORAGE_KEY = "exportLayout";
+const EXPORT_CONTENT_STORAGE_KEY = "exportContent";
+const EXPORT_COLUMNS_STORAGE_KEY = "exportColumns";
+
+type ExportLayout = "grouped" | "separate";
+type ExportContent = "full" | "summary" | "errors";
+type ExportColumns = "full" | "compact";
+
+function normalizeExportLayout(value: unknown): ExportLayout {
+  const v = String(value ?? "").trim();
+  if (v === "grouped") return "grouped";
+  return "separate";
+}
+
+function normalizeExportContent(value: unknown): ExportContent {
+  const v = String(value ?? "").trim();
+  if (v === "summary") return "summary";
+  if (v === "errors") return "errors";
+  return "full";
+}
+
+function normalizeExportColumns(value: unknown): ExportColumns {
+  const v = String(value ?? "").trim();
+  if (v === "compact") return "compact";
+  return "full";
+}
+
+function getExportXlsxOptions(): { layout: ExportLayout; content: ExportContent; columns: ExportColumns } {
+  return {
+    layout: normalizeExportLayout(els.exportLayout?.value),
+    content: normalizeExportContent(els.exportContent?.value),
+    columns: normalizeExportColumns(els.exportColumns?.value),
+  };
+}
+
+function updateExportXlsxOptionsUi(): void {
+  const layout = normalizeExportLayout(els.exportLayout?.value);
+  const grouped = layout === "grouped";
+  els.exportContent.disabled = grouped;
+  els.exportColumns.disabled = grouped;
+  const hint = grouped
+    ? 'Opcje "Zakres" i "Kolumny" dzia\u0142aj\u0105 tylko dla uk\u0142adu "Arkusz na tabel\u0119".'
+    : "";
+  els.exportContent.title = hint;
+  els.exportColumns.title = hint;
+}
+
+function persistExportXlsxOptions(): void {
+  const opt = getExportXlsxOptions();
+  try {
+    localStorage.setItem(EXPORT_LAYOUT_STORAGE_KEY, opt.layout);
+    localStorage.setItem(EXPORT_CONTENT_STORAGE_KEY, opt.content);
+    localStorage.setItem(EXPORT_COLUMNS_STORAGE_KEY, opt.columns);
+  } catch {
+    // ignore
+  }
+}
 
 function normalizeValidationDateGrouping(value: unknown): ValidationDateGrouping {
   const v = String(value ?? "").trim();
@@ -2621,6 +2681,7 @@ async function refreshExportPreview() {
       mrn,
       getExportGroupingOptions(),
       getExportFilters(),
+      getExportXlsxOptions(),
     );
 
     if (!res?.ok) {
@@ -3033,6 +3094,7 @@ els.btnExportDo.addEventListener("click", async () => {
       mrn,
       getExportGroupingOptions(),
       getExportFilters(),
+      getExportXlsxOptions(),
     );
     if (res?.ok) {
       const fp = res.filePath ? ` ${res.filePath}` : "";
@@ -3071,6 +3133,32 @@ try {
 els.exportGrouping.addEventListener("change", () => {
   const v = normalizeValidationDateGrouping(els.exportGrouping.value);
   setExportGroupingValue(v);
+  scheduleExportPreviewRefresh();
+});
+
+try {
+  const savedLayout = localStorage.getItem(EXPORT_LAYOUT_STORAGE_KEY);
+  if (savedLayout) els.exportLayout.value = normalizeExportLayout(savedLayout);
+  const savedContent = localStorage.getItem(EXPORT_CONTENT_STORAGE_KEY);
+  if (savedContent) els.exportContent.value = normalizeExportContent(savedContent);
+  const savedColumns = localStorage.getItem(EXPORT_COLUMNS_STORAGE_KEY);
+  if (savedColumns) els.exportColumns.value = normalizeExportColumns(savedColumns);
+} catch {
+  // ignore
+}
+updateExportXlsxOptionsUi();
+
+els.exportLayout.addEventListener("change", () => {
+  persistExportXlsxOptions();
+  updateExportXlsxOptionsUi();
+  scheduleExportPreviewRefresh();
+});
+els.exportContent.addEventListener("change", () => {
+  persistExportXlsxOptions();
+  scheduleExportPreviewRefresh();
+});
+els.exportColumns.addEventListener("change", () => {
+  persistExportXlsxOptions();
   scheduleExportPreviewRefresh();
 });
 

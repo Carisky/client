@@ -118,6 +118,7 @@ export function registerRaportIpc(): void {
         mrn?: string;
         grouping?: unknown;
         filters?: { importer?: unknown; agent?: unknown; dzial?: unknown };
+        exportOptions?: unknown;
       },
     ) => {
     const period = String(args?.period ?? '').trim();
@@ -164,6 +165,7 @@ export function registerRaportIpc(): void {
           agent: agents.length ? agents : undefined,
           dzial: dzial || undefined,
         },
+        exportOptions: args?.exportOptions,
         filePath: res.filePath,
       });
       return { ok: true, filePath: res.filePath };
@@ -182,6 +184,7 @@ export function registerRaportIpc(): void {
         mrn?: string;
         grouping?: unknown;
         filters?: { importer?: unknown; agent?: unknown; dzial?: unknown };
+        exportOptions?: unknown;
       },
     ) => {
       const period = String(args?.period ?? '').trim();
@@ -204,6 +207,7 @@ export function registerRaportIpc(): void {
             agent: agents.length ? agents : undefined,
             dzial: dzial || undefined,
           },
+          exportOptions: args?.exportOptions,
           limit: 200,
         });
         return { ok: true, preview };

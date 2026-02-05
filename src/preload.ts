@@ -96,6 +96,16 @@ export type ValidationExportFilters = {
   dzial?: string;
 };
 
+export type ValidationExportLayout = 'grouped' | 'separate';
+export type ValidationExportContent = 'full' | 'summary' | 'errors';
+export type ValidationExportColumns = 'full' | 'compact';
+
+export type ValidationExportOptions = {
+  layout?: ValidationExportLayout;
+  content?: ValidationExportContent;
+  columns?: ValidationExportColumns;
+};
+
 export type ValidationDayItems = {
   date: string;
   totals: { all: number; outliersHigh: number; outliersLow: number; singles: number; verifiedManual: number };
@@ -236,14 +246,17 @@ contextBridge.exposeInMainWorld('api', {
     mrn?: string,
     options?: ValidationGroupingOptions,
     filters?: ValidationExportFilters,
-  ): Promise<ValidationExportResult> => ipcRenderer.invoke('validation:exportXlsx', { period, mrn, grouping: options?.grouping, filters }),
+    exportOptions?: ValidationExportOptions,
+  ): Promise<ValidationExportResult> =>
+    ipcRenderer.invoke('validation:exportXlsx', { period, mrn, grouping: options?.grouping, filters, exportOptions }),
   previewValidationExport: (
     period: string,
     mrn?: string,
     options?: ValidationGroupingOptions,
     filters?: ValidationExportFilters,
+    exportOptions?: ValidationExportOptions,
   ): Promise<ValidationExportPreviewResult> =>
-    ipcRenderer.invoke('validation:exportPreview', { period, mrn, grouping: options?.grouping, filters }),
+    ipcRenderer.invoke('validation:exportPreview', { period, mrn, grouping: options?.grouping, filters, exportOptions }),
 
   writeClipboardText: (text: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('clipboard:writeText', { text }),

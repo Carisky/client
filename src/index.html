@@ -284,6 +284,22 @@
                   <option value="month">Miesi&#261;c</option>
                   <option value="months2">2 miesi&#261;ce</option>
                 </select>
+                <label class="muted" for="export-layout" style="margin-left: 10px; margin-right: 6px;">Uk&#322;ad</label>
+                <select id="export-layout" class="form-select form-select-sm" style="max-width: 170px;">
+                  <option value="separate" selected>Arkusz na tabel&#281;</option>
+                  <option value="grouped">Osoby/Dni/Grupy</option>
+                </select>
+                <label class="muted" for="export-content" style="margin-left: 10px; margin-right: 6px;">Zakres</label>
+                <select id="export-content" class="form-select form-select-sm" style="max-width: 190px;">
+                  <option value="full" selected>Pe&#322;ny</option>
+                  <option value="summary">Tylko podsumowania</option>
+                  <option value="errors">Tylko b&#322;&#281;dy</option>
+                </select>
+                <label class="muted" for="export-columns" style="margin-left: 10px; margin-right: 6px;">Kolumny</label>
+                <select id="export-columns" class="form-select form-select-sm" style="max-width: 140px;">
+                  <option value="full" selected>Pe&#322;ne</option>
+                  <option value="compact">Kompakt</option>
+                </select>
                 <input id="export-mrn-filter" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Numer MRN" style="max-width: 190px;" />
 
                 <input id="export-filter-importer" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Importer" style="max-width: 220px;" />
