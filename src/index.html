@@ -207,39 +207,67 @@
 
         <section id="tab-validation" class="tab-panel hidden">
           <div class="sticky-filters">
-            <div class="toolbar">
-              <div class="actions actions-wrap">
-                <label class="muted" for="validation-period" style="margin-right: 6px;">Okres</label>
-                <select id="validation-period" class="form-select form-select-sm" style="max-width: 130px;">
-                  <option value="month" selected>Miesiąc</option>
-                  <option value="year">Rok</option>
-                </select>
-                <input id="validation-month" class="form-control form-control-sm" type="month" />
-                <input id="validation-year" class="form-control form-control-sm hidden" type="number" inputmode="numeric" min="2000" max="2100" placeholder="YYYY" style="max-width: 110px;" />
-                <label class="muted" for="validation-grouping" style="margin-left: 10px; margin-right: 6px;">IQR</label>
-                <select id="validation-grouping" class="form-select form-select-sm" style="max-width: 140px;">
-                  <option value="day" selected>1 dzień</option>
-                  <option value="days2">2 dni</option>
-                  <option value="days3">3 dni</option>
-                  <option value="week">Tydzień</option>
-                  <option value="month">Miesiąc</option>
-                  <option value="months2">2 miesiące</option>
-                </select>
-                <input id="validation-mrn-filter" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Filtr MRN" style="max-width: 190px;" />
-                <button id="btn-validation-mrn-clear" class="btn btn-outline-light btn-sm d-none" title="Wyczyść filtr MRN" aria-label="Wyczyść filtr MRN">
-                  <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin-right:0">
-                    <path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                  </svg>
-                </button>
-                <button id="btn-validation-refresh" class="btn btn-outline-light btn-sm">
-                  <svg class="ui-icon spin-on-busy" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                    <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  Odśwież
-                </button>
+            <div class="toolbar validation-toolbar">
+              <div class="validation-toolbar-layout">
+                <div class="validation-controls-grid">
+                  <div class="validation-control-card">
+                    <div class="validation-control-title">1. Okres danych</div>
+                    <div class="validation-control-row">
+                      <label class="muted" for="validation-period">Tryb</label>
+                      <select id="validation-period" class="form-select form-select-sm validation-w-mode">
+                        <option value="month" selected>Miesi&#261;c</option>
+                        <option value="year">Rok</option>
+                      </select>
+                      <input id="validation-month" class="form-control form-control-sm validation-w-month" type="month" />
+                      <input id="validation-year" class="form-control form-control-sm hidden validation-w-year" type="number" inputmode="numeric" min="2000" max="2100" placeholder="YYYY" />
+                    </div>
+                  </div>
+
+                  <div class="validation-control-card">
+                    <div class="validation-control-title">2. Algorytm IQR</div>
+                    <div class="validation-control-row">
+                      <label class="muted" for="validation-grouping">Okno</label>
+                      <select id="validation-grouping" class="form-select form-select-sm validation-w-iqr">
+                        <option value="day" selected>1 dzie&#324;</option>
+                        <option value="days2">2 dni</option>
+                        <option value="days3">3 dni</option>
+                        <option value="week">Tydzie&#324;</option>
+                        <option value="month">Miesi&#261;c</option>
+                        <option value="months2">2 miesi&#261;ce</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="validation-control-card">
+                    <div class="validation-control-title">3. Filtry wynik&#243;w</div>
+                    <div class="validation-filter-stack">
+                      <div class="validation-control-row">
+                        <label class="muted" for="validation-mrn-filter">MRN</label>
+                        <input id="validation-mrn-filter" class="form-control form-control-sm validation-w-mrn" type="text" inputmode="text" placeholder="Filtr MRN" />
+                        <button id="btn-validation-mrn-clear" class="btn btn-outline-light btn-sm d-none" title="Wyczy&#347;&#263; filtr MRN" aria-label="Wyczy&#347;&#263; filtr MRN">
+                          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin-right:0">
+                            <path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="validation-control-card validation-control-card-actions">
+                    <div class="validation-control-title">4. Akcje</div>
+                    <div class="validation-control-row">
+                      <button id="btn-validation-refresh" class="btn btn-outline-light btn-sm">
+                        <svg class="ui-icon spin-on-busy" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                          <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        Od&#347;wie&#380;
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div id="validation-meta" class="page-info validation-meta"></div>
               </div>
-              <div id="validation-meta" class="page-info"></div>
             </div>
             <div id="validation-active-filters" class="active-filters hidden" aria-label="Aktywne filtry"></div>
           </div>
@@ -250,59 +278,86 @@
 
         <section id="tab-attention" class="tab-panel hidden">
           <div class="sticky-filters">
-            <div class="toolbar">
-              <div class="actions actions-wrap">
-                <label class="muted" for="attention-period" style="margin-right: 6px;">Okres</label>
-                <select id="attention-period" class="form-select form-select-sm" style="max-width: 130px;">
-                  <option value="month" selected>Miesiąc</option>
-                  <option value="year">Rok</option>
-                </select>
-                <input id="attention-month" class="form-control form-control-sm" type="month" />
-                <input id="attention-year" class="form-control form-control-sm hidden" type="number" inputmode="numeric" min="2000" max="2100" placeholder="YYYY" style="max-width: 110px;" />
-                <label class="muted" for="attention-grouping" style="margin-left: 10px; margin-right: 6px;">IQR</label>
-                <select id="attention-grouping" class="form-select form-select-sm" style="max-width: 140px;">
-                  <option value="day" selected>1 dzień</option>
-                  <option value="days2">2 dni</option>
-                  <option value="days3">3 dni</option>
-                  <option value="week">Tydzień</option>
-                  <option value="month">Miesiąc</option>
-                  <option value="months2">2 miesiące</option>
-                </select>
-
-                <div class="agent-filter" style="max-width: 240px;">
-                  <button id="attention-filter-agent-btn" class="form-control form-control-sm agent-filter-btn" type="button" disabled>
-                    Agent celny: ładowanie…
-                  </button>
-                  <div id="attention-filter-agent-popover" class="agent-filter-popover hidden" role="dialog" aria-label="Agent celny">
-                    <div class="agent-filter-head">
-                      <input id="attention-filter-agent-search" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Szukaj agenta…" />
-                      <button id="attention-filter-agent-clear" class="btn btn-outline-light btn-sm" type="button" title="Wyczyść wybór">Wyczyść</button>
+            <div class="toolbar attention-toolbar">
+              <div class="attention-toolbar-layout">
+                <div class="attention-controls-grid">
+                  <div class="attention-control-card">
+                    <div class="attention-control-title">1. Okres danych</div>
+                    <div class="attention-control-row">
+                      <label class="muted" for="attention-period">Tryb</label>
+                      <select id="attention-period" class="form-select form-select-sm attention-w-mode">
+                        <option value="month" selected>Miesi&#261;c</option>
+                        <option value="year">Rok</option>
+                      </select>
+                      <input id="attention-month" class="form-control form-control-sm attention-w-month" type="month" />
+                      <input id="attention-year" class="form-control form-control-sm hidden attention-w-year" type="number" inputmode="numeric" min="2000" max="2100" placeholder="YYYY" />
                     </div>
-                    <div id="attention-filter-agent-list" class="agent-filter-list"></div>
+                  </div>
+
+                  <div class="attention-control-card">
+                    <div class="attention-control-title">2. Algorytm IQR</div>
+                    <div class="attention-control-row">
+                      <label class="muted" for="attention-grouping">Okno</label>
+                      <select id="attention-grouping" class="form-select form-select-sm attention-w-iqr">
+                        <option value="day" selected>1 dzie&#324;</option>
+                        <option value="days2">2 dni</option>
+                        <option value="days3">3 dni</option>
+                        <option value="week">Tydzie&#324;</option>
+                        <option value="month">Miesi&#261;c</option>
+                        <option value="months2">2 miesi&#261;ce</option>
+                      </select>
+                      <span class="muted attention-inline-hint">Sortowanie: kliknij nag&#322;&#243;wki tabeli.</span>
+                    </div>
+                  </div>
+
+                  <div class="attention-control-card">
+                    <div class="attention-control-title">3. Filtry wynik&#243;w</div>
+                    <div class="attention-filter-stack">
+                      <div class="attention-control-row">
+                        <div class="agent-filter attention-agent-filter">
+                          <button id="attention-filter-agent-btn" class="form-control form-control-sm agent-filter-btn" type="button" disabled>
+                            Agent celny: &#322;adowanie...
+                          </button>
+                          <div id="attention-filter-agent-popover" class="agent-filter-popover hidden" role="dialog" aria-label="Agent celny">
+                            <div class="agent-filter-head">
+                              <input id="attention-filter-agent-search" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Szukaj agenta&hellip;" />
+                              <button id="attention-filter-agent-clear" class="btn btn-outline-light btn-sm" type="button" title="Wyczy&#347;&#263; wyb&#243;r">Wyczy&#347;&#263;</button>
+                            </div>
+                            <div id="attention-filter-agent-list" class="agent-filter-list"></div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="attention-control-row attention-date-row">
+                        <label class="muted" for="attention-date-from">Od</label>
+                        <input id="attention-date-from" class="form-control form-control-sm attention-w-date" type="date" />
+                        <label class="muted" for="attention-date-to">Do</label>
+                        <input id="attention-date-to" class="form-control form-control-sm attention-w-date" type="date" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="attention-control-card attention-control-card-actions">
+                    <div class="attention-control-title">4. Akcje</div>
+                    <div class="attention-control-row">
+                      <button id="btn-attention-refresh" class="btn btn-outline-light btn-sm">
+                        <svg class="ui-icon spin-on-busy" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                          <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        Od&#347;wie&#380;
+                      </button>
+                      <button id="btn-attention-quick-export" class="btn btn-outline-light btn-sm" title="Szybki eksport do Excel" aria-label="Szybki eksport do Excel">
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M12 3v10m0 0l4-4m-4 4l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                          <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                        Szybki eksport
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                <label class="muted" for="attention-date-from" style="margin-left: 10px; margin-right: 6px;">Od</label>
-                <input id="attention-date-from" class="form-control form-control-sm" type="date" style="max-width: 155px;" />
-                <label class="muted" for="attention-date-to" style="margin-left: 6px; margin-right: 6px;">Do</label>
-                <input id="attention-date-to" class="form-control form-control-sm" type="date" style="max-width: 155px;" />
-
-                <button id="btn-attention-refresh" class="btn btn-outline-light btn-sm">
-                  <svg class="ui-icon spin-on-busy" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                    <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  Odśwież
-                </button>
-                <button id="btn-attention-quick-export" class="btn btn-outline-light btn-sm" title="Szybki eksport do Excel" aria-label="Szybki eksport do Excel">
-                  <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 3v10m0 0l4-4m-4 4l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                  </svg>
-                  Szybki eksport
-                </button>
+                <div id="attention-meta" class="page-info attention-meta"></div>
               </div>
-              <div id="attention-meta" class="page-info"></div>
             </div>
             <div id="attention-active-filters" class="active-filters hidden" aria-label="Aktywne filtry"></div>
           </div>
@@ -519,3 +574,4 @@
     </div>
   </body>
 </html>
+
