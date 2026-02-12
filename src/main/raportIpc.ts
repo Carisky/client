@@ -1,5 +1,6 @@
 import { app, clipboard, dialog, ipcMain, shell } from 'electron';
 import * as path from 'path';
+import * as xlsx from 'xlsx';
 import {
   clearAgentDzialMap,
   clearRaportData,
@@ -214,6 +215,128 @@ export function registerRaportIpc(): void {
           limit: 200,
         });
         return { ok: true, preview };
+      } catch (e: unknown) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'attention:quickExportXlsx',
+    async (
+      _evt,
+      args: {
+        period: string;
+        grouping?: unknown;
+        range?: { start?: unknown; end?: unknown };
+        agentFilter?: unknown;
+        rows?: Array<{
+          dataMrn?: unknown;
+          nrSad?: unknown;
+          mrn?: unknown;
+          discrepancyPct?: unknown;
+          side?: unknown;
+          agent?: unknown;
+        }>;
+      },
+    ) => {
+      const period = String(args?.period ?? '').trim();
+      if (!period) return { ok: false, error: 'missing period' };
+
+      const grouping = String(args?.grouping ?? 'day').trim() || 'day';
+      const rangeStart = String(args?.range?.start ?? '').trim();
+      const rangeEnd = String(args?.range?.end ?? '').trim();
+      const safePart = (v: string) =>
+        v
+          .replace(/[\\/:*?"<>|]+/g, '_')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 80);
+      const toText = (v: unknown): string => String(v ?? '').trim();
+      const toPctText = (v: number | null): string => {
+        if (v == null || !Number.isFinite(v)) return '';
+        if (v < 0.05) return '<0.1%';
+        return `${v.toFixed(1)}%`;
+      };
+
+      const parsedRows = (Array.isArray(args?.rows) ? args.rows : [])
+        .map((r) => {
+          const discrepancyRaw = Number(r?.discrepancyPct);
+          const discrepancyPct = Number.isFinite(discrepancyRaw) ? discrepancyRaw : null;
+          const sideRaw = toText(r?.side).toLowerCase();
+          const side = sideRaw === 'high' || sideRaw === 'low' ? sideRaw : '';
+          return {
+            dataMrn: toText(r?.dataMrn),
+            nrSad: toText(r?.nrSad),
+            mrn: toText(r?.mrn),
+            discrepancyPct,
+            side,
+            agent: toText(r?.agent),
+          };
+        })
+        .filter((r) => r.dataMrn || r.nrSad || r.mrn || r.agent || r.discrepancyPct != null);
+
+      if (!parsedRows.length) return { ok: false, error: 'no rows to export' };
+
+      const agentFilter = (Array.isArray(args?.agentFilter) ? args.agentFilter : [])
+        .map((v) => toText(v))
+        .filter(Boolean);
+
+      const parts = [`Uwagi_${safePart(period)}_${safePart(grouping)}`, `Rows_${parsedRows.length}`];
+      if (agentFilter.length === 1) parts.push(`Agent_${safePart(agentFilter[0] ?? '')}`);
+      else if (agentFilter.length > 1) parts.push(`Agents_${agentFilter.length}`);
+      const fileName = `${parts.join('_')}.xlsx`.slice(0, 200);
+      const defaultPath = path.join(app.getPath('downloads'), fileName);
+
+      const res = await dialog.showSaveDialog({
+        title: 'Szybki eksport (Do Mojej Uwagi) do Excel',
+        defaultPath,
+        filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+      });
+      if (res.canceled || !res.filePath) return { ok: false, canceled: true };
+
+      try {
+        const rows = parsedRows.map((r, idx) => ({
+          Lp: idx + 1,
+          DataMRN: r.dataMrn,
+          NrSAD: r.nrSad,
+          MRN: r.mrn,
+          OdchylenieIQR: toPctText(r.discrepancyPct),
+          Kierunek: r.side === 'high' ? '↑' : r.side === 'low' ? '↓' : '',
+          AgentCelny: r.agent,
+        }));
+
+        const wb = xlsx.utils.book_new();
+        const ws = xlsx.utils.json_to_sheet(rows);
+        if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] };
+        ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+        ws['!cols'] = [
+          { wch: 7 },
+          { wch: 14 },
+          { wch: 14 },
+          { wch: 28 },
+          { wch: 16 },
+          { wch: 10 },
+          { wch: 28 },
+        ];
+        xlsx.utils.book_append_sheet(wb, ws, 'DoMojejUwagi');
+
+        const metaRows: Array<[string, string | number]> = [
+          ['Raport', 'Do Mojej Uwagi (szybki eksport)'],
+          ['ExportedAt', new Date().toISOString()],
+          ['Period', period],
+          ['Grouping', grouping],
+          ['RangeStart', rangeStart],
+          ['RangeEnd', rangeEnd],
+          ['AgentFilter', agentFilter.length ? agentFilter.join(', ') : 'wszyscy'],
+          ['Rows', rows.length],
+        ];
+        const wsMeta = xlsx.utils.aoa_to_sheet(metaRows);
+        wsMeta['!cols'] = [{ wch: 20 }, { wch: 80 }];
+        xlsx.utils.book_append_sheet(wb, wsMeta, 'Meta');
+
+        xlsx.writeFile(wb, res.filePath, { bookType: 'xlsx', compression: true });
+        return { ok: true, filePath: res.filePath };
       } catch (e: unknown) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }

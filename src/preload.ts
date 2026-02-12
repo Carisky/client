@@ -143,6 +143,15 @@ export type ValidationOutlierErrors = {
   items: ValidationOutlierError[];
 };
 
+export type AttentionQuickExportItem = {
+  dataMrn: string | null;
+  nrSad: string | null;
+  mrn: string | null;
+  discrepancyPct: number | null;
+  side: 'low' | 'high' | null;
+  agent: string | null;
+};
+
 export type ValidationExportResult = {
   ok: boolean;
   canceled?: boolean;
@@ -260,6 +269,13 @@ contextBridge.exposeInMainWorld('api', {
     exportOptions?: ValidationExportOptions,
   ): Promise<ValidationExportResult> =>
     ipcRenderer.invoke('validation:exportXlsx', { period, mrn, grouping: options?.grouping, filters, exportOptions }),
+  exportAttentionQuickXlsx: (payload: {
+    period: string;
+    grouping?: ValidationDateGrouping;
+    range?: { start?: string; end?: string };
+    agentFilter?: string[];
+    rows: AttentionQuickExportItem[];
+  }): Promise<ValidationExportResult> => ipcRenderer.invoke('attention:quickExportXlsx', payload),
   previewValidationExport: (
     period: string,
     mrn?: string,

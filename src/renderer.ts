@@ -129,6 +129,9 @@ const els = {
   btnAttentionRefresh: document.getElementById(
     "btn-attention-refresh",
   ) as HTMLButtonElement,
+  btnAttentionQuickExport: document.getElementById(
+    "btn-attention-quick-export",
+  ) as HTMLButtonElement,
   attentionMeta: document.getElementById("attention-meta") as HTMLElement,
   attentionList: document.getElementById("attention-list") as HTMLElement,
   attentionStatus: document.getElementById("attention-status") as HTMLElement,
@@ -459,6 +462,8 @@ let validationRefreshSeq = 0;
 let attentionRefreshSeq = 0;
 let lastValidationSummary: LoadSummary = { shown: 0, high: 0, low: 0 };
 let lastAttentionSummary: LoadSummary = { shown: 0, high: 0, low: 0 };
+let lastAttentionItems: ValidationOutlierError[] = [];
+let lastAttentionRange: { start: string; end: string } | null = null;
 
 function formatLoadSummaryText(s: LoadSummary): string {
   const shown = Number.isFinite(s.shown) ? Math.max(0, Math.trunc(s.shown)) : 0;
@@ -1066,6 +1071,9 @@ type ValidationPeriodMode = "month" | "year";
 type ValidationOutlierError = Awaited<
   ReturnType<typeof window.api.getValidationOutlierErrors>
 >["items"][number];
+type AttentionQuickExportRow = Parameters<
+  typeof window.api.exportAttentionQuickXlsx
+>[0]["rows"][number];
 
 function encodeKey(key: unknown): string {
   try {
@@ -1964,40 +1972,14 @@ function renderValidationErrorsByAgent(items: ValidationOutlierError[]): string 
 }
 
 function renderAttentionItemsByAgent(items: ValidationOutlierError[]): string {
-  if (!items || items.length === 0) {
+  const groups = groupAttentionItemsByAgent(items);
+  if (!groups.length) {
     return `<div class="muted" style="padding:6px 2px 10px;">Brak błędów (odchyleń poza limitem).</div>`;
   }
 
-  const byAgent = new Map<string, ValidationOutlierError[]>();
-  for (const it of items) {
-    const raw = String(it.agent_celny ?? "").trim();
-    const agent = raw.length > 0 ? raw : "—";
-    const arr = byAgent.get(agent);
-    if (arr) arr.push(it);
-    else byAgent.set(agent, [it]);
-  }
-
-  const agents = Array.from(byAgent.entries()).sort(
-    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
-  );
-
-  return agents
-    .map(([agent, list]) => {
-      list.sort(
-        (a, b) =>
-          (b.discrepancyPct ?? -1) - (a.discrepancyPct ?? -1) ||
-          String(a.data_mrn ?? "").localeCompare(String(b.data_mrn ?? "")) ||
-          String(a.numer_mrn ?? "").localeCompare(String(b.numer_mrn ?? "")),
-      );
-
-      let countHigh = 0;
-      let countLow = 0;
-      for (const it of list) {
-        if (it.outlierSide === "high") countHigh += 1;
-        else if (it.outlierSide === "low") countLow += 1;
-      }
-
-      const rows = list
+  return groups
+    .map((g) => {
+      const rows = g.list
         .map((e) => {
           const arrow = renderCoefArrow(e.outlierSide);
           const opisParts = [
@@ -2019,10 +2001,10 @@ function renderAttentionItemsByAgent(items: ValidationOutlierError[]): string {
       return `
         <details class="accordion validation-agent" open>
           <summary>
-            <span class="mrn-code" title="${escapeHtml(agent)}">${escapeHtml(agent)}</span>
-            <span class="badge rounded-pill badge-count">${list.length}</span>
-            <span class="badge rounded-pill badge-orange" title="Powyżej górnej granicy IQR">↑ ${countHigh}</span>
-            <span class="badge rounded-pill badge-orange" title="Poniżej dolnej granicy IQR">↓ ${countLow}</span>
+            <span class="mrn-code" title="${escapeHtml(g.agent)}">${escapeHtml(g.agent)}</span>
+            <span class="badge rounded-pill badge-count">${g.list.length}</span>
+            <span class="badge rounded-pill badge-orange" title="Powyżej górnej granicy IQR">↑ ${g.countHigh}</span>
+            <span class="badge rounded-pill badge-orange" title="Poniżej dolnej granicy IQR">↓ ${g.countLow}</span>
           </summary>
           <div class="accordion-body">
             <table class="table table-sm table-dark table-hover mini-table" style="margin:0">
@@ -2041,6 +2023,73 @@ function renderAttentionItemsByAgent(items: ValidationOutlierError[]): string {
       `;
     })
     .join("");
+}
+
+type AttentionAgentGroup = {
+  agent: string;
+  list: ValidationOutlierError[];
+  countHigh: number;
+  countLow: number;
+};
+
+function groupAttentionItemsByAgent(
+  items: ValidationOutlierError[],
+): AttentionAgentGroup[] {
+  if (!items || !items.length) return [];
+
+  const byAgent = new Map<string, ValidationOutlierError[]>();
+  for (const it of items) {
+    const raw = String(it.agent_celny ?? "").trim();
+    const agent = raw.length > 0 ? raw : "—";
+    const arr = byAgent.get(agent);
+    if (arr) arr.push(it);
+    else byAgent.set(agent, [it]);
+  }
+
+  return Array.from(byAgent.entries())
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .map(([agent, list]) => {
+      const sorted = list.slice().sort(
+        (a, b) =>
+          (b.discrepancyPct ?? -1) - (a.discrepancyPct ?? -1) ||
+          String(a.data_mrn ?? "").localeCompare(String(b.data_mrn ?? "")) ||
+          String(a.numer_mrn ?? "").localeCompare(String(b.numer_mrn ?? "")),
+      );
+
+      let countHigh = 0;
+      let countLow = 0;
+      for (const it of sorted) {
+        if (it.outlierSide === "high") countHigh += 1;
+        else if (it.outlierSide === "low") countLow += 1;
+      }
+
+      return { agent, list: sorted, countHigh, countLow };
+    });
+}
+
+function buildAttentionQuickExportRows(
+  items: ValidationOutlierError[],
+): AttentionQuickExportRow[] {
+  const groups = groupAttentionItemsByAgent(items);
+  const rows: AttentionQuickExportRow[] = [];
+  for (const g of groups) {
+    for (const it of g.list) {
+      rows.push({
+        dataMrn: it.data_mrn ?? null,
+        nrSad: it.nr_sad ?? null,
+        mrn: it.numer_mrn ?? null,
+        discrepancyPct:
+          it.discrepancyPct != null && Number.isFinite(it.discrepancyPct)
+            ? it.discrepancyPct
+            : null,
+        side: it.outlierSide ?? null,
+        agent:
+          String(it.agent_celny ?? "").trim() ||
+          (g.agent === "—" ? null : g.agent),
+      });
+    }
+  }
+  return rows;
 }
 
 async function refreshValidationDashboardCounts() {
@@ -2752,6 +2801,8 @@ async function refreshAttention() {
   await ensureAttentionDefaults();
   const period = getAttentionPeriodValue();
   if (!period) {
+    lastAttentionItems = [];
+    lastAttentionRange = null;
     els.btnAttentionRefresh.disabled = false;
     setStatus(els.attentionStatus, "Wybierz miesiąc lub rok.");
     return;
@@ -2783,6 +2834,8 @@ async function refreshAttention() {
             const k = normalizeAgentKey(it.agent_celny);
             return k && selectedKeys.has(k);
           });
+    lastAttentionItems = filtered.slice();
+    lastAttentionRange = { ...outliers.range };
 
     const groupingValue = getAttentionGroupingOptions().grouping;
     const groupingLabel =
@@ -2824,6 +2877,8 @@ async function refreshAttention() {
     setStatus(els.attentionStatus, "");
   } catch (e: unknown) {
     if (mySeq !== attentionRefreshSeq) return;
+    lastAttentionItems = [];
+    lastAttentionRange = null;
     setStatus(els.attentionStatus, `Błąd: ${errorMessage(e)}`);
   } finally {
     if (mySeq === attentionRefreshSeq) els.btnAttentionRefresh.disabled = false;
@@ -3144,6 +3199,55 @@ const scheduleAttentionRefresh = () => {
 };
 
 els.btnAttentionRefresh.addEventListener("click", () => void refreshAttention());
+els.btnAttentionQuickExport.addEventListener("click", async () => {
+  setStatus(els.attentionStatus, "");
+  updateAttentionPeriodUi();
+  await ensureAttentionDefaults();
+
+  const period = getAttentionPeriodValue();
+  if (!period) {
+    setStatus(els.attentionStatus, "Wybierz miesiąc lub rok.");
+    return;
+  }
+
+  const rows = buildAttentionQuickExportRows(lastAttentionItems);
+  if (!rows.length) {
+    setStatus(els.attentionStatus, "Brak danych do eksportu.");
+    return;
+  }
+
+  const grouping = getAttentionGroupingOptions().grouping;
+  const agentFilter = getSelectedAttentionAgents();
+
+  els.btnAttentionQuickExport.disabled = true;
+  setStatus(els.attentionStatus, "Eksportowanie do Excel...");
+  setBusy(true);
+  try {
+    const res = await window.api.exportAttentionQuickXlsx({
+      period,
+      grouping,
+      range: lastAttentionRange ?? undefined,
+      agentFilter,
+      rows,
+    });
+    if (res?.ok) {
+      const fp = res.filePath ? ` ${res.filePath}` : "";
+      setStatus(els.attentionStatus, `Zapisano.${fp}`);
+    } else if (res?.canceled) {
+      setStatus(els.attentionStatus, "Anulowano.");
+    } else {
+      setStatus(
+        els.attentionStatus,
+        `Błąd eksportu: ${String(res?.error ?? "unknown")}`,
+      );
+    }
+  } catch (e: unknown) {
+    setStatus(els.attentionStatus, `Błąd eksportu: ${errorMessage(e)}`);
+  } finally {
+    els.btnAttentionQuickExport.disabled = false;
+    setBusy(false);
+  }
+});
 els.attentionPeriod.addEventListener("change", () => {
   updateAttentionPeriodUi();
   scheduleAttentionRefresh();

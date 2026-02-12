@@ -1,4 +1,5 @@
 import type {
+  AttentionQuickExportItem,
   AgentDzialInfo,
   DbInfo,
   ImportProgress,
@@ -62,6 +63,13 @@ declare global {
         filters?: ValidationExportFilters,
         exportOptions?: ValidationExportOptions,
       ) => Promise<ValidationExportResult>;
+      exportAttentionQuickXlsx: (payload: {
+        period: string;
+        grouping?: ValidationGroupingOptions["grouping"];
+        range?: { start?: string; end?: string };
+        agentFilter?: string[];
+        rows: AttentionQuickExportItem[];
+      }) => Promise<ValidationExportResult>;
       previewValidationExport: (
         period: string,
         mrn?: string,
