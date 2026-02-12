@@ -1036,6 +1036,37 @@ details.row-accordion > summary::-webkit-details-marker {
   background: rgba(var(--panel-rgb), 0.35);
 }
 
+.table-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.table-sort-btn:hover {
+  color: var(--text);
+}
+
+.table-sort-btn.active {
+  color: var(--text);
+}
+
+.table-sort-arrow {
+  min-width: 12px;
+  text-align: center;
+  opacity: 0.72;
+}
+
+.table-sort-btn:hover .table-sort-arrow,
+.table-sort-btn.active .table-sort-arrow {
+  opacity: 0.98;
+}
+
 .mini-table tr.outlier td {
   background: rgba(249, 115, 22, 0.14);
   border-bottom-color: rgba(249, 115, 22, 0.18);

@@ -127,6 +127,12 @@ const els = {
   attentionGrouping: document.getElementById(
     "attention-grouping",
   ) as HTMLSelectElement,
+  attentionDateFrom: document.getElementById(
+    "attention-date-from",
+  ) as HTMLInputElement,
+  attentionDateTo: document.getElementById(
+    "attention-date-to",
+  ) as HTMLInputElement,
   btnAttentionRefresh: document.getElementById(
     "btn-attention-refresh",
   ) as HTMLButtonElement,
@@ -1179,14 +1185,28 @@ type ValidationDateGrouping =
   | "week"
   | "month"
   | "months2";
+type AttentionSortField = "iqr" | "date";
+type AttentionSortDirection = "asc" | "desc";
+type AttentionTableSort = {
+  field: AttentionSortField;
+  direction: AttentionSortDirection;
+};
 
 const VALIDATION_GROUPING_STORAGE_KEY = "validationGrouping";
 const ATTENTION_GROUPING_STORAGE_KEY = "attentionGrouping";
+const ATTENTION_TABLE_SORT_STORAGE_KEY = "attentionTableSort";
+const ATTENTION_DATE_FROM_STORAGE_KEY = "attentionDateFrom";
+const ATTENTION_DATE_TO_STORAGE_KEY = "attentionDateTo";
 const EXPORT_GROUPING_STORAGE_KEY = "exportGrouping";
 const EXPORT_LAYOUT_STORAGE_KEY = "exportLayout";
 const EXPORT_CONTENT_STORAGE_KEY = "exportContent";
 const EXPORT_COLUMNS_STORAGE_KEY = "exportColumns";
 const EXPORT_FILTERS_OPEN_STORAGE_KEY = "exportFiltersOpen";
+
+let attentionTableSort: AttentionTableSort = {
+  field: "iqr",
+  direction: "asc",
+};
 
 type ExportLayout = "grouped" | "separate";
 type ExportContent = "full" | "summary" | "errors";
@@ -1355,6 +1375,118 @@ function setExportGroupingValue(value: ValidationDateGrouping): void {
   } catch {
     // ignore
   }
+}
+
+function normalizeIsoDateOnly(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : "";
+}
+
+function normalizeAttentionSortField(value: unknown): AttentionSortField {
+  const v = String(value ?? "").trim().toLowerCase();
+  return v === "date" ? "date" : "iqr";
+}
+
+function normalizeAttentionSortDirection(value: unknown): AttentionSortDirection {
+  const v = String(value ?? "").trim().toLowerCase();
+  return v === "desc" ? "desc" : "asc";
+}
+
+function parseAttentionTableSort(value: unknown): AttentionTableSort {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const rec = value as { field?: unknown; direction?: unknown };
+    return {
+      field: normalizeAttentionSortField(rec.field),
+      direction: normalizeAttentionSortDirection(rec.direction),
+    };
+  }
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return { field: "iqr", direction: "asc" };
+  const [fieldRaw, directionRaw] = raw.split(":");
+  return {
+    field: normalizeAttentionSortField(fieldRaw),
+    direction: normalizeAttentionSortDirection(directionRaw),
+  };
+}
+
+function getAttentionDateFromValue(): string {
+  return normalizeIsoDateOnly(els.attentionDateFrom?.value ?? "");
+}
+
+function getAttentionDateToValue(): string {
+  return normalizeIsoDateOnly(els.attentionDateTo?.value ?? "");
+}
+
+function setAttentionDateFromValue(value: string): void {
+  const normalized = normalizeIsoDateOnly(value);
+  els.attentionDateFrom.value = normalized;
+  try {
+    localStorage.setItem(ATTENTION_DATE_FROM_STORAGE_KEY, normalized);
+  } catch {
+    // ignore
+  }
+  renderAttentionActiveFilters();
+}
+
+function setAttentionDateToValue(value: string): void {
+  const normalized = normalizeIsoDateOnly(value);
+  els.attentionDateTo.value = normalized;
+  try {
+    localStorage.setItem(ATTENTION_DATE_TO_STORAGE_KEY, normalized);
+  } catch {
+    // ignore
+  }
+  renderAttentionActiveFilters();
+}
+
+function getAttentionDateRangeFilter(): { from: string; to: string } {
+  let from = getAttentionDateFromValue();
+  let to = getAttentionDateToValue();
+  if (from && to && from > to) {
+    const swap = from;
+    from = to;
+    to = swap;
+  }
+  return { from, to };
+}
+
+function getAttentionTableSort(): AttentionTableSort {
+  return attentionTableSort;
+}
+
+function setAttentionTableSort(value: AttentionTableSort): void {
+  attentionTableSort = {
+    field: normalizeAttentionSortField(value?.field),
+    direction: normalizeAttentionSortDirection(value?.direction),
+  };
+  try {
+    localStorage.setItem(
+      ATTENTION_TABLE_SORT_STORAGE_KEY,
+      `${attentionTableSort.field}:${attentionTableSort.direction}`,
+    );
+  } catch {
+    // ignore
+  }
+  renderAttentionActiveFilters();
+}
+
+function toggleAttentionTableSort(field: AttentionSortField): void {
+  const current = getAttentionTableSort();
+  if (current.field === field) {
+    setAttentionTableSort({
+      field,
+      direction: current.direction === "asc" ? "desc" : "asc",
+    });
+    return;
+  }
+  setAttentionTableSort({ field, direction: "asc" });
+}
+
+function formatAttentionSortLabel(sort: AttentionTableSort): string {
+  const col = sort.field === "date" ? "Data MRN" : "IQR";
+  const dir = sort.direction === "asc" ? "↑" : "↓";
+  return `${col} ${dir}`;
 }
 
 function formatBucketLabel(start: string, end: string): string {
@@ -1661,21 +1793,63 @@ function getSelectedAttentionAgents(): string[] {
 
 function renderAttentionActiveFilters(): void {
   const selected = getSelectedAttentionAgents();
-  const chips: ActiveFilterChip[] = selected.map((name) => ({
-    text: `Agent: ${name}`,
-    ariaRemove: `Usuń filtr Agent: ${name}`,
-    remove: () => {
-      attentionAgentSelectedKeys.delete(normalizeAgentKey(name));
-      persistAttentionAgentSelection();
-      updateAttentionAgentUi();
-      renderAttentionAgentList();
-      scheduleAttentionRefresh();
-    },
-  }));
+  const chips: ActiveFilterChip[] = [];
+
+  for (const name of selected) {
+    chips.push({
+      text: `Agent: ${name}`,
+      ariaRemove: `Usun filtr Agent: ${name}`,
+      remove: () => {
+        attentionAgentSelectedKeys.delete(normalizeAgentKey(name));
+        persistAttentionAgentSelection();
+        updateAttentionAgentUi();
+        renderAttentionAgentList();
+        scheduleAttentionRefresh();
+      },
+    });
+  }
+
+  const { from, to } = getAttentionDateRangeFilter();
+  if (from) {
+    chips.push({
+      text: `Data od: ${from}`,
+      ariaRemove: "Usun filtr Data od",
+      remove: () => {
+        setAttentionDateFromValue("");
+        scheduleAttentionRefresh();
+      },
+    });
+  }
+  if (to) {
+    chips.push({
+      text: `Data do: ${to}`,
+      ariaRemove: "Usun filtr Data do",
+      remove: () => {
+        setAttentionDateToValue("");
+        scheduleAttentionRefresh();
+      },
+    });
+  }
+
+  const sort = getAttentionTableSort();
+  const isDefaultSort = sort.field === "iqr" && sort.direction === "asc";
+  if (!isDefaultSort) {
+    chips.push({
+      text: `Sort: ${formatAttentionSortLabel(sort)}`,
+      ariaRemove: "Usun sortowanie",
+      remove: () => {
+        setAttentionTableSort({ field: "iqr", direction: "asc" });
+        scheduleAttentionRefresh();
+      },
+    });
+  }
 
   renderActiveFilterChips(els.attentionActiveFilters, chips, () => {
     attentionAgentSelectedKeys.clear();
     persistAttentionAgentSelection();
+    setAttentionDateFromValue("");
+    setAttentionDateToValue("");
+    setAttentionTableSort({ field: "iqr", direction: "asc" });
     setAttentionAgentPopoverOpen(false);
     updateAttentionAgentUi();
     renderAttentionAgentList();
@@ -1982,8 +2156,105 @@ function renderValidationErrorsByAgent(items: ValidationOutlierError[]): string 
     .join("");
 }
 
-function renderAttentionItemsByAgent(items: ValidationOutlierError[]): string {
-  const groups = groupAttentionItemsByAgent(items);
+function compareAttentionByIqr(
+  a: ValidationOutlierError,
+  b: ValidationOutlierError,
+  direction: AttentionSortDirection,
+): number {
+  const aPct =
+    a.discrepancyPct != null && Number.isFinite(a.discrepancyPct)
+      ? a.discrepancyPct
+      : direction === "asc"
+        ? Number.POSITIVE_INFINITY
+        : Number.NEGATIVE_INFINITY;
+  const bPct =
+    b.discrepancyPct != null && Number.isFinite(b.discrepancyPct)
+      ? b.discrepancyPct
+      : direction === "asc"
+        ? Number.POSITIVE_INFINITY
+        : Number.NEGATIVE_INFINITY;
+
+  const pctCmp = direction === "asc" ? aPct - bPct : bPct - aPct;
+  if (pctCmp !== 0) return pctCmp;
+
+  return (
+    String(a.data_mrn ?? "").localeCompare(String(b.data_mrn ?? "")) ||
+    String(a.numer_mrn ?? "").localeCompare(String(b.numer_mrn ?? ""))
+  );
+}
+
+function compareAttentionByDate(
+  a: ValidationOutlierError,
+  b: ValidationOutlierError,
+  direction: AttentionSortDirection,
+): number {
+  const aDate = normalizeIsoDateOnly(a.data_mrn ?? "");
+  const bDate = normalizeIsoDateOnly(b.data_mrn ?? "");
+  const aKey =
+    aDate || (direction === "asc" ? "9999-12-31" : "0000-01-01");
+  const bKey =
+    bDate || (direction === "asc" ? "9999-12-31" : "0000-01-01");
+  const dateCmp =
+    direction === "asc"
+      ? aKey.localeCompare(bKey)
+      : bKey.localeCompare(aKey);
+  if (dateCmp !== 0) return dateCmp;
+  return (
+    compareAttentionByIqr(a, b, "desc") ||
+    String(a.numer_mrn ?? "").localeCompare(String(b.numer_mrn ?? ""))
+  );
+}
+
+function compareAttentionRows(
+  a: ValidationOutlierError,
+  b: ValidationOutlierError,
+  sort: AttentionTableSort,
+): number {
+  if (sort.field === "date") {
+    return (
+      compareAttentionByDate(a, b, sort.direction) ||
+      compareAttentionByIqr(a, b, "desc")
+    );
+  }
+  return (
+    compareAttentionByIqr(a, b, sort.direction) ||
+    compareAttentionByDate(a, b, "asc")
+  );
+}
+
+function renderAttentionSortHeader(
+  label: string,
+  field: AttentionSortField,
+  sort: AttentionTableSort,
+): string {
+  const active = sort.field === field;
+  const arrow = !active ? "↕" : sort.direction === "asc" ? "↑" : "↓";
+  const title = active
+    ? `Sortowanie: ${label} (${sort.direction === "asc" ? "rosnaco" : "malejaco"})`
+    : `Sortuj po: ${label}`;
+  return `<button class="table-sort-btn${active ? " active" : ""}" type="button" data-attention-sort-field="${field}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><span>${escapeHtml(label)}</span><span class="table-sort-arrow">${arrow}</span></button>`;
+}
+
+function applyAttentionDateRangeFilter(
+  items: ValidationOutlierError[],
+  from: string,
+  to: string,
+): ValidationOutlierError[] {
+  if (!from && !to) return items.slice();
+  return items.filter((it) => {
+    const d = normalizeIsoDateOnly(it.data_mrn ?? "");
+    if (!d) return false;
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  });
+}
+
+function renderAttentionItemsByAgent(
+  items: ValidationOutlierError[],
+  sort: AttentionTableSort = getAttentionTableSort(),
+): string {
+  const groups = groupAttentionItemsByAgent(items, sort);
   if (!groups.length) {
     return `<div class="muted" style="padding:6px 2px 10px;">Brak błędów (odchyleń poza limitem).</div>`;
   }
@@ -2021,10 +2292,10 @@ function renderAttentionItemsByAgent(items: ValidationOutlierError[]): string {
             <table class="table table-sm table-dark table-hover mini-table" style="margin:0">
               <thead>
                 <tr>
-                  <th>Data MRN</th>
+                  <th>${renderAttentionSortHeader("Data MRN", "date", sort)}</th>
                   <th>Nr SAD</th>
                   <th>MRN</th>
-                  <th>Odchylenie (IQR)</th>
+                  <th>${renderAttentionSortHeader("Odchylenie (IQR)", "iqr", sort)}</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
@@ -2045,6 +2316,7 @@ type AttentionAgentGroup = {
 
 function groupAttentionItemsByAgent(
   items: ValidationOutlierError[],
+  sort: AttentionTableSort = getAttentionTableSort(),
 ): AttentionAgentGroup[] {
   if (!items || !items.length) return [];
 
@@ -2060,12 +2332,9 @@ function groupAttentionItemsByAgent(
   return Array.from(byAgent.entries())
     .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
     .map(([agent, list]) => {
-      const sorted = list.slice().sort(
-        (a, b) =>
-          (b.discrepancyPct ?? -1) - (a.discrepancyPct ?? -1) ||
-          String(a.data_mrn ?? "").localeCompare(String(b.data_mrn ?? "")) ||
-          String(a.numer_mrn ?? "").localeCompare(String(b.numer_mrn ?? "")),
-      );
+      const sorted = list
+        .slice()
+        .sort((a, b) => compareAttentionRows(a, b, sort));
 
       let countHigh = 0;
       let countLow = 0;
@@ -2080,8 +2349,9 @@ function groupAttentionItemsByAgent(
 
 function buildAttentionQuickExportRows(
   items: ValidationOutlierError[],
+  sort: AttentionTableSort = getAttentionTableSort(),
 ): AttentionQuickExportRow[] {
-  const groups = groupAttentionItemsByAgent(items);
+  const groups = groupAttentionItemsByAgent(items, sort);
   const rows: AttentionQuickExportRow[] = [];
   for (const g of groups) {
     for (const it of g.list) {
@@ -2838,15 +3108,24 @@ async function refreshAttention() {
     setAvailableAttentionAgents(outliers.availableAgents);
 
     const selectedKeys = attentionAgentSelectedKeys;
-    const filtered =
+    const byAgent =
       selectedKeys.size === 0
         ? (outliers.items ?? [])
         : (outliers.items ?? []).filter((it) => {
             const k = normalizeAgentKey(it.agent_celny);
             return k && selectedKeys.has(k);
           });
+    const { from: dateFrom, to: dateTo } = getAttentionDateRangeFilter();
+    const byDateRange = applyAttentionDateRangeFilter(byAgent, dateFrom, dateTo);
+    const sort = getAttentionTableSort();
+    const filtered = byDateRange
+      .slice()
+      .sort((a, b) => compareAttentionRows(a, b, sort));
     lastAttentionItems = filtered.slice();
-    lastAttentionRange = { ...outliers.range };
+    lastAttentionRange = {
+      start: dateFrom || outliers.range.start,
+      end: dateTo || outliers.range.end,
+    };
 
     const groupingValue = getAttentionGroupingOptions().grouping;
     const groupingLabel =
@@ -2861,6 +3140,11 @@ async function refreshAttention() {
         : selectedAgents.length === 1
           ? selectedAgents[0]
           : `${selectedAgents.length} wybranych`;
+    const dateRangeLabel =
+      dateFrom || dateTo
+        ? `${dateFrom || "..."}-${dateTo || "..."}`
+        : "caly zakres";
+    const sortLabel = formatAttentionSortLabel(sort);
 
     let countHigh = 0;
     let countLow = 0;
@@ -2880,11 +3164,15 @@ async function refreshAttention() {
         <div><span class="muted">Okres:</span> <span class="mono">${escapeHtml(period)}</span></div>
         <div><span class="muted">Zakres:</span> <span class="mono">${escapeHtml(outliers.range.start)}–${escapeHtml(outliers.range.end)}</span></div>
         <div><span class="muted">IQR:</span> ${escapeHtml(String(groupingLabel).trim())} <span class="muted">• Agent:</span> ${escapeHtml(agentLabel)}</div>
+        <div><span class="muted">Data:</span> <span class="mono">${escapeHtml(dateRangeLabel)}</span> <span class="muted">• Sort:</span> ${escapeHtml(sortLabel)}</div>
         <div><span class="muted">Błędy:</span> <span class="mono">${filtered.length}</span> <span class="muted">• ↑</span> <span class="mono">${countHigh}</span> <span class="muted">• ↓</span> <span class="mono">${countLow}</span></div>
       </div>
     `;
 
-    els.attentionList.innerHTML = renderAttentionItemsByAgent(filtered);
+    els.attentionList.innerHTML = renderAttentionItemsByAgent(
+      filtered,
+      sort,
+    );
     setStatus(els.attentionStatus, "");
   } catch (e: unknown) {
     if (mySeq !== attentionRefreshSeq) return;
@@ -3221,7 +3509,10 @@ els.btnAttentionQuickExport.addEventListener("click", async () => {
     return;
   }
 
-  const rows = buildAttentionQuickExportRows(lastAttentionItems);
+  const rows = buildAttentionQuickExportRows(
+    lastAttentionItems,
+    getAttentionTableSort(),
+  );
   if (!rows.length) {
     setStatus(els.attentionStatus, "Brak danych do eksportu.");
     return;
@@ -3268,6 +3559,28 @@ els.attentionYear.addEventListener("change", () => scheduleAttentionRefresh());
 updateAttentionPeriodUi();
 
 try {
+  const savedFrom = localStorage.getItem(ATTENTION_DATE_FROM_STORAGE_KEY) ?? "";
+  if (savedFrom) els.attentionDateFrom.value = normalizeIsoDateOnly(savedFrom);
+  const savedTo = localStorage.getItem(ATTENTION_DATE_TO_STORAGE_KEY) ?? "";
+  if (savedTo) els.attentionDateTo.value = normalizeIsoDateOnly(savedTo);
+} catch {
+  // ignore
+}
+setAttentionDateFromValue(els.attentionDateFrom.value);
+setAttentionDateToValue(els.attentionDateTo.value);
+
+try {
+  const savedSort = localStorage.getItem(ATTENTION_TABLE_SORT_STORAGE_KEY);
+  if (savedSort) {
+    setAttentionTableSort(parseAttentionTableSort(savedSort));
+  } else {
+    setAttentionTableSort({ field: "iqr", direction: "asc" });
+  }
+} catch {
+  setAttentionTableSort({ field: "iqr", direction: "asc" });
+}
+
+try {
   const saved =
     localStorage.getItem(ATTENTION_GROUPING_STORAGE_KEY) ||
     localStorage.getItem(VALIDATION_GROUPING_STORAGE_KEY);
@@ -3281,6 +3594,26 @@ try {
 els.attentionGrouping.addEventListener("change", () => {
   const v = normalizeValidationDateGrouping(els.attentionGrouping.value);
   setAttentionGroupingValue(v);
+  scheduleAttentionRefresh();
+});
+els.attentionDateFrom.addEventListener("change", () => {
+  setAttentionDateFromValue(els.attentionDateFrom.value);
+  scheduleAttentionRefresh();
+});
+els.attentionDateTo.addEventListener("change", () => {
+  setAttentionDateToValue(els.attentionDateTo.value);
+  scheduleAttentionRefresh();
+});
+els.attentionList.addEventListener("click", (e) => {
+  const target = e.target as HTMLElement | null;
+  const btn = target?.closest(
+    "[data-attention-sort-field]",
+  ) as HTMLButtonElement | null;
+  if (!btn) return;
+  const field = normalizeAttentionSortField(
+    btn.dataset.attentionSortField ?? "",
+  );
+  toggleAttentionTableSort(field);
   scheduleAttentionRefresh();
 });
 
