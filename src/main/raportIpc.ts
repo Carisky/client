@@ -1,4 +1,5 @@
 import { app, clipboard, dialog, ipcMain, shell } from 'electron';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as xlsx from 'xlsx';
 import {
@@ -25,7 +26,18 @@ import {
 } from './raportDb';
 import { checkForUpdates } from './appUpdate';
 import { startSquirrelUpdate } from './squirrelAutoUpdate';
-import { getResourcesSyncInfo } from './resourcesAutoFix';
+import { getResourcesSyncInfo, resolveResourcePath } from './resourcesAutoFix';
+
+function getResourceAsDataUrl(relPath: string, mimeType: string): string | null {
+  const filePath = resolveResourcePath(relPath);
+  if (!filePath) return null;
+  try {
+    const content = fs.readFileSync(filePath);
+    return `data:${mimeType};base64,${content.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
 
 export function registerRaportIpc(): void {
   ipcMain.handle('raport:import', async (event) => {
@@ -344,6 +356,9 @@ export function registerRaportIpc(): void {
   );
 
   ipcMain.handle('app:version', async () => ({ version: app.getVersion() }));
+  ipcMain.handle('app:logoDataUrl', async () =>
+    getResourceAsDataUrl('logo.png', 'image/png'),
+  );
   ipcMain.handle('updates:check', async () => checkForUpdates());
   ipcMain.handle('updates:downloadAndInstall', async (event, args: { feedUrl: string }) => {
     const feedUrl = String(args?.feedUrl ?? '').trim();

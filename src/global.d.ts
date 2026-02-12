@@ -81,6 +81,7 @@ declare global {
       writeClipboardText: (text: string) => Promise<{ ok: boolean; error?: string }>;
 
       getAppVersion: () => Promise<{ version: string }>;
+      getLogoDataUrl: () => Promise<string | null>;
       checkForUpdates: () => Promise<UpdateCheckResult>;
       onUpdateStatus: (handler: (s: UpdateStatus) => void) => () => void;
       downloadAndInstallUpdate: (feedUrl: string) => Promise<UpdateStartResult>;

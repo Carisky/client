@@ -52,6 +52,7 @@ const els = {
 
   meta: document.getElementById("meta") as HTMLElement,
   appVersion: document.getElementById("app-version") as HTMLElement,
+  tabsLogo: document.getElementById("tabs-logo-img") as HTMLImageElement,
 
   updateNudge: document.getElementById("update-nudge") as HTMLElement,
   updateNudgeText: document.getElementById("update-nudge-text") as HTMLElement,
@@ -1245,6 +1246,16 @@ function persistExportXlsxOptions(): void {
     localStorage.setItem(EXPORT_LAYOUT_STORAGE_KEY, opt.layout);
     localStorage.setItem(EXPORT_CONTENT_STORAGE_KEY, opt.content);
     localStorage.setItem(EXPORT_COLUMNS_STORAGE_KEY, opt.columns);
+  } catch {
+    // ignore
+  }
+}
+
+async function refreshTabsLogo() {
+  if (!els.tabsLogo) return;
+  try {
+    const dataUrl = await window.api.getLogoDataUrl();
+    if (dataUrl) els.tabsLogo.src = dataUrl;
   } catch {
     // ignore
   }
@@ -3569,3 +3580,4 @@ setupCopyToClipboard();
 void refreshMeta();
 startUpdatesPolling();
 void refreshAppVersion();
+void refreshTabsLogo();

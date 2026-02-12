@@ -289,6 +289,13 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('clipboard:writeText', { text }),
 
   getAppVersion: (): Promise<{ version: string }> => ipcRenderer.invoke('app:version'),
+  getLogoDataUrl: async (): Promise<string | null> => {
+    try {
+      return await ipcRenderer.invoke('app:logoDataUrl');
+    } catch {
+      return null;
+    }
+  },
   checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
   onUpdateStatus: (handler: (s: UpdateStatus) => void): (() => void) => {
     const listener = (_event: unknown, payload: UpdateStatus) => handler(payload);
