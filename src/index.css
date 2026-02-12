@@ -1112,11 +1112,14 @@ details.row-accordion > summary::-webkit-details-marker {
 .badge-slate {
   border: 1px solid rgba(148, 163, 184, 0.32);
   background: rgba(148, 163, 184, 0.12);
+  color: var(--text);
 }
 
 .badge-orange {
   border: 1px solid rgba(249, 115, 22, 0.45);
   background: rgba(249, 115, 22, 0.18);
+  color: var(--text);
+  font-weight: 600;
 }
 
 .day-badge[data-zero='1'] {

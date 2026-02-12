@@ -243,7 +243,7 @@ const THEME_STORAGE_KEY = "raportSad.theme";
 function readStoredTheme(): ThemeName | null {
   try {
     const raw = localStorage.getItem(THEME_STORAGE_KEY);
-    if (raw === "dark" || raw === "light") return raw;
+    if (raw === "light" || raw === "dark") return raw;
     return null;
   } catch {
     return null;
@@ -251,9 +251,9 @@ function readStoredTheme(): ThemeName | null {
 }
 
 function getDocumentTheme(): ThemeName {
-  return document.documentElement.getAttribute("data-bs-theme") === "light"
-    ? "light"
-    : "dark";
+  return document.documentElement.getAttribute("data-bs-theme") === "dark"
+    ? "dark"
+    : "light";
 }
 
 function syncThemeUi(theme: ThemeName) {
@@ -275,8 +275,9 @@ function applyTheme(theme: ThemeName, persist: boolean) {
 }
 
 function initTheme() {
-  const initialTheme = readStoredTheme() ?? getDocumentTheme();
+  const initialTheme: ThemeName = readStoredTheme() ?? getDocumentTheme();
   applyTheme(initialTheme, false);
+  els.themeToggle.disabled = false;
 
   els.themeToggle.addEventListener("change", () => {
     applyTheme(els.themeToggle.checked ? "light" : "dark", true);
