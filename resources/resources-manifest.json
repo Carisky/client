@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
-  "version": "1.2.1",
+  "version": "1.2.2",
   "channel": "master",
-  "generatedAt": "2026-02-05T11:45:06.729Z",
+  "generatedAt": "2026-02-12T08:23:12.562Z",
   "files": [
     {
       "path": "additional-data-maps.json",
@@ -13,6 +13,11 @@
       "path": "icon.ico",
       "size": 102313,
       "sha256": "2c35c16c15c33bf930301a2489ab504107632fad62191191a45f49abc5d56821"
+    },
+    {
+      "path": "logo.png",
+      "size": 18065,
+      "sha256": "24501a92061e0acffa68616da4c7a33fcdafd977ecd32a0b22971f43bb9a614d"
     },
     {
       "path": "update.json",
