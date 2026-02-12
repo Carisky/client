@@ -161,6 +161,24 @@ const els = {
   btnAttentionAgentClear: document.getElementById(
     "attention-filter-agent-clear",
   ) as HTMLButtonElement,
+  attentionClientMode: document.getElementById(
+    "attention-client-filter-mode",
+  ) as HTMLSelectElement,
+  attentionClientBtn: document.getElementById(
+    "attention-filter-client-btn",
+  ) as HTMLButtonElement,
+  attentionClientPopover: document.getElementById(
+    "attention-filter-client-popover",
+  ) as HTMLElement,
+  attentionClientSearch: document.getElementById(
+    "attention-filter-client-search",
+  ) as HTMLInputElement,
+  attentionClientList: document.getElementById(
+    "attention-filter-client-list",
+  ) as HTMLElement,
+  btnAttentionClientClear: document.getElementById(
+    "attention-filter-client-clear",
+  ) as HTMLButtonElement,
 
   exportPeriod: document.getElementById("export-period") as HTMLSelectElement,
   exportMonth: document.getElementById("export-month") as HTMLInputElement,
@@ -1630,6 +1648,15 @@ function normalizeAgentKey(value: unknown): string {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function normalizeAttentionClientName(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  return raw.length > 0 ? raw : "—";
+}
+
+function normalizeAttentionClientKey(value: unknown): string {
+  return normalizeAttentionClientName(value).toLowerCase();
+}
+
 type ExportAgentOption = { key: string; name: string };
 let exportAgentOptions: ExportAgentOption[] = [];
 let exportAgentSelectedKeys = new Set<string>();
@@ -1762,18 +1789,60 @@ function setAvailableExportAgents(agents: unknown): void {
 }
 
 const ATTENTION_AGENTS_STORAGE_KEY = "attentionAgents";
+const ATTENTION_CLIENTS_STORAGE_KEY = "attentionClients";
+const ATTENTION_CLIENT_MODE_STORAGE_KEY = "attentionClientMode";
+
+type AttentionClientMode = "whitelist" | "blacklist";
 type AttentionAgentOption = { key: string; name: string };
+type AttentionClientOption = { key: string; name: string };
+
 let attentionAgentOptions: AttentionAgentOption[] = [];
 let attentionAgentSelectedKeys = new Set<string>();
+let attentionClientOptions: AttentionClientOption[] = [];
+let attentionClientSelectedKeys = new Set<string>();
 
 let attentionAgentOutsideClickUnsub: (() => void) | null = null;
 let attentionAgentKeydownUnsub: (() => void) | null = null;
+let attentionClientOutsideClickUnsub: (() => void) | null = null;
+let attentionClientKeydownUnsub: (() => void) | null = null;
 
 function persistAttentionAgentSelection(): void {
   try {
     localStorage.setItem(
       ATTENTION_AGENTS_STORAGE_KEY,
       JSON.stringify(Array.from(attentionAgentSelectedKeys)),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function normalizeAttentionClientMode(value: unknown): AttentionClientMode {
+  return String(value ?? "").trim().toLowerCase() === "blacklist"
+    ? "blacklist"
+    : "whitelist";
+}
+
+function getAttentionClientMode(): AttentionClientMode {
+  return normalizeAttentionClientMode(els.attentionClientMode?.value);
+}
+
+function setAttentionClientMode(value: unknown): void {
+  const mode = normalizeAttentionClientMode(value);
+  els.attentionClientMode.value = mode;
+  try {
+    localStorage.setItem(ATTENTION_CLIENT_MODE_STORAGE_KEY, mode);
+  } catch {
+    // ignore
+  }
+  renderAttentionActiveFilters();
+}
+
+function persistAttentionClientSelection(): void {
+  try {
+    localStorage.setItem(
+      ATTENTION_CLIENTS_STORAGE_KEY,
+      JSON.stringify(Array.from(attentionClientSelectedKeys)),
     );
   } catch {
     // ignore
@@ -1792,8 +1861,24 @@ function getSelectedAttentionAgents(): string[] {
   return out;
 }
 
+function getSelectedAttentionClients(): string[] {
+  if (!attentionClientSelectedKeys.size || !attentionClientOptions.length) return [];
+  const map = new Map(attentionClientOptions.map((o) => [o.key, o.name] as const));
+  const out: string[] = [];
+  for (const k of attentionClientSelectedKeys) {
+    const v = map.get(k);
+    if (v) out.push(v);
+  }
+  out.sort((a, b) => a.localeCompare(b));
+  return out;
+}
+
 function renderAttentionActiveFilters(): void {
   const selected = getSelectedAttentionAgents();
+  const selectedClients = getSelectedAttentionClients();
+  const clientMode = getAttentionClientMode();
+  const clientModeLabel =
+    clientMode === "blacklist" ? "black-list" : "white-list";
   const chips: ActiveFilterChip[] = [];
 
   for (const name of selected) {
@@ -1805,6 +1890,20 @@ function renderAttentionActiveFilters(): void {
         persistAttentionAgentSelection();
         updateAttentionAgentUi();
         renderAttentionAgentList();
+        scheduleAttentionRefresh();
+      },
+    });
+  }
+
+  for (const name of selectedClients) {
+    chips.push({
+      text: `Klient (${clientModeLabel}): ${name}`,
+      ariaRemove: `Usun filtr Klient: ${name}`,
+      remove: () => {
+        attentionClientSelectedKeys.delete(normalizeAttentionClientKey(name));
+        persistAttentionClientSelection();
+        updateAttentionClientUi();
+        renderAttentionClientList();
         scheduleAttentionRefresh();
       },
     });
@@ -1848,12 +1947,18 @@ function renderAttentionActiveFilters(): void {
   renderActiveFilterChips(els.attentionActiveFilters, chips, () => {
     attentionAgentSelectedKeys.clear();
     persistAttentionAgentSelection();
+    attentionClientSelectedKeys.clear();
+    persistAttentionClientSelection();
+    setAttentionClientMode("whitelist");
     setAttentionDateFromValue("");
     setAttentionDateToValue("");
     setAttentionTableSort({ field: "iqr", direction: "asc" });
     setAttentionAgentPopoverOpen(false);
+    setAttentionClientPopoverOpen(false);
     updateAttentionAgentUi();
+    updateAttentionClientUi();
     renderAttentionAgentList();
+    renderAttentionClientList();
     scheduleAttentionRefresh();
   });
 }
@@ -1913,9 +2018,102 @@ function renderAttentionAgentList(): void {
   els.attentionAgentList.appendChild(frag);
 }
 
+function updateAttentionClientUi(): void {
+  const selected = getSelectedAttentionClients();
+  els.btnAttentionClientClear.disabled = selected.length === 0;
+
+  if (!attentionClientOptions.length) {
+    els.attentionClientBtn.textContent = "Klient: ładowanie…";
+    els.attentionClientBtn.disabled = true;
+    return;
+  }
+
+  els.attentionClientBtn.disabled = false;
+  if (selected.length === 0) {
+    els.attentionClientBtn.textContent = "Klient: wszyscy";
+  } else if (selected.length === 1) {
+    els.attentionClientBtn.textContent = `Klient: ${selected[0]}`;
+  } else {
+    els.attentionClientBtn.textContent = `Klient: ${selected.length} wybranych`;
+  }
+
+  renderAttentionActiveFilters();
+}
+
+function renderAttentionClientList(): void {
+  const q = String(els.attentionClientSearch.value ?? "").trim().toLowerCase();
+  const items = q
+    ? attentionClientOptions.filter((o) => o.name.toLowerCase().includes(q))
+    : attentionClientOptions;
+
+  els.attentionClientList.innerHTML = "";
+  if (!items.length) {
+    els.attentionClientList.innerHTML = `<div class="agent-filter-empty">Brak wyników.</div>`;
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  for (const o of items) {
+    const label = document.createElement("label");
+    label.className = "agent-filter-item";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "form-check-input";
+    input.dataset.key = o.key;
+    input.checked = attentionClientSelectedKeys.has(o.key);
+
+    const span = document.createElement("span");
+    span.textContent = o.name;
+
+    label.appendChild(input);
+    label.appendChild(span);
+    frag.appendChild(label);
+  }
+  els.attentionClientList.appendChild(frag);
+}
+
+function setAttentionClientPopoverOpen(open: boolean): void {
+  els.attentionClientPopover.classList.toggle("hidden", !open);
+  if (open) {
+    setAttentionAgentPopoverOpen(false);
+    renderAttentionClientList();
+    els.attentionClientSearch.focus();
+    els.attentionClientSearch.select();
+
+    if (!attentionClientOutsideClickUnsub) {
+      const onDown = (e: MouseEvent) => {
+        const target = e.target as Node | null;
+        if (!target) return;
+        if (els.attentionClientPopover.contains(target)) return;
+        if (els.attentionClientBtn.contains(target)) return;
+        setAttentionClientPopoverOpen(false);
+      };
+      document.addEventListener("mousedown", onDown, true);
+      attentionClientOutsideClickUnsub = () =>
+        document.removeEventListener("mousedown", onDown, true);
+    }
+
+    if (!attentionClientKeydownUnsub) {
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setAttentionClientPopoverOpen(false);
+      };
+      document.addEventListener("keydown", onKey, true);
+      attentionClientKeydownUnsub = () =>
+        document.removeEventListener("keydown", onKey, true);
+    }
+  } else {
+    attentionClientOutsideClickUnsub?.();
+    attentionClientOutsideClickUnsub = null;
+    attentionClientKeydownUnsub?.();
+    attentionClientKeydownUnsub = null;
+  }
+}
+
 function setAttentionAgentPopoverOpen(open: boolean): void {
   els.attentionAgentPopover.classList.toggle("hidden", !open);
   if (open) {
+    setAttentionClientPopoverOpen(false);
     renderAttentionAgentList();
     els.attentionAgentSearch.focus();
     els.attentionAgentSearch.select();
@@ -1970,6 +2168,41 @@ function setAvailableAttentionAgents(agents: unknown): void {
 
   updateAttentionAgentUi();
   renderAttentionAgentList();
+}
+
+function setAvailableAttentionClients(clients: unknown): void {
+  const input = Array.isArray(clients) ? clients : [];
+  const map = new Map<string, string>();
+  for (const c of input) {
+    const name = normalizeAttentionClientName(c);
+    const key = normalizeAttentionClientKey(name);
+    if (!key || map.has(key)) continue;
+    map.set(key, name);
+  }
+
+  attentionClientOptions = Array.from(map.entries())
+    .map(([key, name]) => ({ key, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const availableKeys = new Set(attentionClientOptions.map((o) => o.key));
+  attentionClientSelectedKeys = new Set(
+    Array.from(attentionClientSelectedKeys).filter((k) => availableKeys.has(k)),
+  );
+
+  updateAttentionClientUi();
+  renderAttentionClientList();
+}
+
+function applyAttentionClientFilter(
+  items: ValidationOutlierError[],
+): ValidationOutlierError[] {
+  if (!attentionClientSelectedKeys.size) return items;
+  const mode = getAttentionClientMode();
+  return items.filter((it) => {
+    const key = normalizeAttentionClientKey(it.odbiorca);
+    const selected = attentionClientSelectedKeys.has(key);
+    return mode === "blacklist" ? !selected : selected;
+  });
 }
 
 function getExportFilters(): ExportFilters {
@@ -2276,6 +2509,7 @@ function renderAttentionItemsByAgent(
             <td class="mono">${escapeHtml(e.data_mrn ?? "-")}</td>
              <td class="mono">${renderCopyableText(e.nr_sad, "sad") || escapeHtml(e.nr_sad ?? "-")}</td>
              <td class="mono">${renderCopyableText(e.numer_mrn, "mrn") || escapeHtml(e.numer_mrn ?? "-")}</td>
+            <td title="${escapeHtml(normalizeAttentionClientName(e.odbiorca))}">${escapeHtml(normalizeAttentionClientName(e.odbiorca))}</td>
             <td class="mono" title="${escapeHtml(opis)}">${arrow}<span style="margin-left:6px;">${escapeHtml(formatPct(e.discrepancyPct))}</span></td>
           </tr>`;
         })
@@ -2296,6 +2530,7 @@ function renderAttentionItemsByAgent(
                   <th>${renderAttentionSortHeader("Data MRN", "date", sort)}</th>
                   <th>Nr SAD</th>
                   <th>MRN</th>
+                  <th>Klient</th>
                   <th>${renderAttentionSortHeader("Odchylenie (IQR)", "iqr", sort)}</th>
                 </tr>
               </thead>
@@ -3107,6 +3342,9 @@ async function refreshAttention() {
     if (mySeq !== attentionRefreshSeq) return;
 
     setAvailableAttentionAgents(outliers.availableAgents);
+    setAvailableAttentionClients(
+      (outliers.items ?? []).map((it) => normalizeAttentionClientName(it.odbiorca)),
+    );
 
     const selectedKeys = attentionAgentSelectedKeys;
     const byAgent =
@@ -3116,8 +3354,9 @@ async function refreshAttention() {
             const k = normalizeAgentKey(it.agent_celny);
             return k && selectedKeys.has(k);
           });
+    const byClient = applyAttentionClientFilter(byAgent);
     const { from: dateFrom, to: dateTo } = getAttentionDateRangeFilter();
-    const byDateRange = applyAttentionDateRangeFilter(byAgent, dateFrom, dateTo);
+    const byDateRange = applyAttentionDateRangeFilter(byClient, dateFrom, dateTo);
     const sort = getAttentionTableSort();
     const filtered = byDateRange
       .slice()
@@ -3141,6 +3380,20 @@ async function refreshAttention() {
         : selectedAgents.length === 1
           ? selectedAgents[0]
           : `${selectedAgents.length} wybranych`;
+    const selectedClients = getSelectedAttentionClients();
+    const clientMode = getAttentionClientMode();
+    const clientModeLabel =
+      clientMode === "blacklist" ? "black-list" : "white-list";
+    const clientLabel =
+      selectedClients.length === 0
+        ? "wszyscy"
+        : selectedClients.length === 1
+          ? selectedClients[0]
+          : `${selectedClients.length} wybranych`;
+    const clientSummary =
+      selectedClients.length === 0
+        ? clientLabel
+        : `${clientModeLabel}: ${clientLabel}`;
     const dateRangeLabel =
       dateFrom || dateTo
         ? `${dateFrom || "..."}-${dateTo || "..."}`
@@ -3163,10 +3416,11 @@ async function refreshAttention() {
     els.attentionMeta.innerHTML = `
       <div class="meta-lines">
         <div><span class="muted">Okres:</span> <span class="mono">${escapeHtml(period)}</span></div>
-        <div><span class="muted">Zakres:</span> <span class="mono">${escapeHtml(outliers.range.start)}–${escapeHtml(outliers.range.end)}</span></div>
-        <div><span class="muted">IQR:</span> ${escapeHtml(String(groupingLabel).trim())} <span class="muted">• Agent:</span> ${escapeHtml(agentLabel)}</div>
-        <div><span class="muted">Data:</span> <span class="mono">${escapeHtml(dateRangeLabel)}</span> <span class="muted">• Sort:</span> ${escapeHtml(sortLabel)}</div>
-        <div><span class="muted">Błędy:</span> <span class="mono">${filtered.length}</span> <span class="muted">• ↑</span> <span class="mono">${countHigh}</span> <span class="muted">• ↓</span> <span class="mono">${countLow}</span></div>
+        <div><span class="muted">Zakres:</span> <span class="mono">${escapeHtml(outliers.range.start)}&ndash;${escapeHtml(outliers.range.end)}</span></div>
+        <div><span class="muted">IQR:</span> ${escapeHtml(String(groupingLabel).trim())} <span class="muted">&bull; Agent:</span> ${escapeHtml(agentLabel)}</div>
+        <div><span class="muted">Klient:</span> ${escapeHtml(clientSummary)}</div>
+        <div><span class="muted">Data:</span> <span class="mono">${escapeHtml(dateRangeLabel)}</span> <span class="muted">&bull; Sort:</span> ${escapeHtml(sortLabel)}</div>
+        <div><span class="muted">B&#322;&#281;dy:</span> <span class="mono">${filtered.length}</span> <span class="muted">&bull; &#8593;</span> <span class="mono">${countHigh}</span> <span class="muted">&bull; &#8595;</span> <span class="mono">${countLow}</span></div>
       </div>
     `;
 
@@ -3630,6 +3884,24 @@ try {
 } catch {
   // ignore
 }
+try {
+  const saved = localStorage.getItem(ATTENTION_CLIENTS_STORAGE_KEY);
+  if (saved) {
+    const parsed = JSON.parse(saved) as unknown;
+    const keys = Array.isArray(parsed)
+      ? parsed.map((v) => String(v ?? "").trim()).filter(Boolean)
+      : [];
+    attentionClientSelectedKeys = new Set(keys);
+  }
+} catch {
+  // ignore
+}
+try {
+  const savedMode = localStorage.getItem(ATTENTION_CLIENT_MODE_STORAGE_KEY);
+  setAttentionClientMode(savedMode ?? "whitelist");
+} catch {
+  setAttentionClientMode("whitelist");
+}
 
 els.attentionAgentBtn.addEventListener("click", () => {
   if (els.attentionAgentBtn.disabled) return;
@@ -3655,6 +3927,36 @@ els.attentionAgentList.addEventListener("change", (e) => {
   else attentionAgentSelectedKeys.delete(key);
   persistAttentionAgentSelection();
   updateAttentionAgentUi();
+  scheduleAttentionRefresh();
+});
+els.attentionClientMode.addEventListener("change", () => {
+  setAttentionClientMode(els.attentionClientMode.value);
+  scheduleAttentionRefresh();
+});
+els.attentionClientBtn.addEventListener("click", () => {
+  if (els.attentionClientBtn.disabled) return;
+  const open = els.attentionClientPopover.classList.contains("hidden");
+  setAttentionClientPopoverOpen(open);
+});
+els.attentionClientSearch.addEventListener("input", () =>
+  renderAttentionClientList(),
+);
+els.btnAttentionClientClear.addEventListener("click", () => {
+  attentionClientSelectedKeys.clear();
+  persistAttentionClientSelection();
+  updateAttentionClientUi();
+  renderAttentionClientList();
+  scheduleAttentionRefresh();
+});
+els.attentionClientList.addEventListener("change", (e) => {
+  const target = e.target as HTMLInputElement | null;
+  if (!target || target.tagName !== "INPUT" || target.type !== "checkbox") return;
+  const key = String(target.dataset.key ?? "").trim();
+  if (!key) return;
+  if (target.checked) attentionClientSelectedKeys.add(key);
+  else attentionClientSelectedKeys.delete(key);
+  persistAttentionClientSelection();
+  updateAttentionClientUi();
   scheduleAttentionRefresh();
 });
 
@@ -3915,3 +4217,4 @@ void refreshMeta();
 startUpdatesPolling();
 void refreshAppVersion();
 void refreshTabsLogo();
+

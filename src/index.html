@@ -327,6 +327,25 @@
                           </div>
                         </div>
                       </div>
+                      <div class="attention-control-row">
+                        <label class="muted" for="attention-client-filter-mode">Klient</label>
+                        <select id="attention-client-filter-mode" class="form-select form-select-sm attention-w-client-mode">
+                          <option value="whitelist" selected>Bia&#322;a lista</option>
+                          <option value="blacklist">Czarna lista</option>
+                        </select>
+                        <div class="agent-filter attention-client-filter">
+                          <button id="attention-filter-client-btn" class="form-control form-control-sm agent-filter-btn" type="button" disabled>
+                            Klient: &#322;adowanie...
+                          </button>
+                          <div id="attention-filter-client-popover" class="agent-filter-popover hidden" role="dialog" aria-label="Klient">
+                            <div class="agent-filter-head">
+                              <input id="attention-filter-client-search" class="form-control form-control-sm" type="text" inputmode="text" placeholder="Szukaj klienta&hellip;" />
+                              <button id="attention-filter-client-clear" class="btn btn-outline-light btn-sm" type="button" title="Wyczy&#347;&#263; wyb&#243;r">Wyczy&#347;&#263;</button>
+                            </div>
+                            <div id="attention-filter-client-list" class="agent-filter-list"></div>
+                          </div>
+                        </div>
+                      </div>
                       <div class="attention-control-row attention-date-row">
                         <label class="muted" for="attention-date-from">Od</label>
                         <input id="attention-date-from" class="form-control form-control-sm attention-w-date" type="date" />
