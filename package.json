@@ -1,7 +1,7 @@
 {
   "name": "client",
   "productName": "SAD Guard",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Appliction for validate sad data",
   "main": ".webpack/main",
   "private": true,
