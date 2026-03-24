@@ -52,6 +52,16 @@ function getResourceAsDataUrl(relPath: string, mimeType: string): string | null 
   }
 }
 
+function getRestrictedVisibleAgentNames(
+  effectivePermissions: string[] | undefined,
+  fullName: string | null | undefined,
+  allPermissionKey: string,
+): string[] | null {
+  if (effectivePermissions?.includes(allPermissionKey)) return null;
+  const normalizedFullName = String(fullName ?? '').trim();
+  return [normalizedFullName || '__NO_VISIBLE_AGENT__'];
+}
+
 export function registerRaportIpc(): void {
   ipcMain.handle('auth:session', async () => getAuthSessionState());
   ipcMain.handle(
@@ -265,9 +275,11 @@ export function registerRaportIpc(): void {
   ipcMain.handle('attention:outlierErrors', async (_evt, args: { month: string; mrn?: string; grouping?: unknown }) => {
     await assertFeatureAccess('ATTENTION_VIEW');
     const session = await getAuthSessionState();
-    const visibleAgentNames = session.user?.effectivePermissions.includes('ATTENTION_VIEW_ALL')
-      ? null
-      : [session.user?.fullName ?? ''];
+    const visibleAgentNames = getRestrictedVisibleAgentNames(
+      session.user?.effectivePermissions,
+      session.user?.fullName,
+      'ATTENTION_VIEW_ALL',
+    );
     return getValidationOutlierErrors({
       month: args?.month,
       mrn: args?.mrn,
@@ -292,6 +304,12 @@ export function registerRaportIpc(): void {
       },
     ) => {
       await assertFeatureAccess('EXPORT_VIEW');
+      const session = await getAuthSessionState();
+      const visibleAgentNames = getRestrictedVisibleAgentNames(
+        session.user?.effectivePermissions,
+        session.user?.fullName,
+        'EXPORT_VIEW_ALL',
+      );
 
       const period = String(args?.period ?? '').trim();
       const grouping = String(args?.grouping ?? 'day').trim();
@@ -338,6 +356,7 @@ export function registerRaportIpc(): void {
             dzial: dzial || undefined,
           },
           exportOptions: args?.exportOptions,
+          visibleAgentNames,
           filePath: res.filePath,
         });
         return { ok: true, filePath: res.filePath };
@@ -360,6 +379,12 @@ export function registerRaportIpc(): void {
       },
     ) => {
       await assertFeatureAccess('EXPORT_VIEW');
+      const session = await getAuthSessionState();
+      const visibleAgentNames = getRestrictedVisibleAgentNames(
+        session.user?.effectivePermissions,
+        session.user?.fullName,
+        'EXPORT_VIEW_ALL',
+      );
 
       const period = String(args?.period ?? '').trim();
       const mrn = String(args?.mrn ?? '').trim();
@@ -382,6 +407,7 @@ export function registerRaportIpc(): void {
             dzial: dzial || undefined,
           },
           exportOptions: args?.exportOptions,
+          visibleAgentNames,
           limit: 200,
         });
         return { ok: true, preview };

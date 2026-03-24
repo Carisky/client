@@ -1758,7 +1758,26 @@ let exportAgentSelectedKeys = new Set<string>();
 let exportAgentOutsideClickUnsub: (() => void) | null = null;
 let exportAgentKeydownUnsub: (() => void) | null = null;
 
+function getLockedExportAgentKey(): string | null {
+  if (hasAppPermission("EXPORT_VIEW_ALL")) return null;
+  const fullName = String(getCurrentAuthSession()?.user?.fullName ?? "").trim();
+  const key = normalizeAgentKey(fullName);
+  return key || null;
+}
+
+function getLockedExportAgentLabel(): string | null {
+  return getLockedExportAgentKey();
+}
+
+function getExportAgentSelectionKeys(): Set<string> {
+  const lockedKey = getLockedExportAgentKey();
+  if (lockedKey) return new Set([lockedKey]);
+  return exportAgentSelectedKeys;
+}
+
 function getSelectedExportAgents(): string[] {
+  const lockedLabel = getLockedExportAgentLabel();
+  if (lockedLabel) return [lockedLabel];
   if (!exportAgentSelectedKeys.size || !exportAgentOptions.length) return [];
   const map = new Map(exportAgentOptions.map((o) => [o.key, o.name] as const));
   const out: string[] = [];
@@ -1772,7 +1791,15 @@ function getSelectedExportAgents(): string[] {
 
 function updateExportAgentUi(): void {
   const selected = getSelectedExportAgents();
-  els.btnExportAgentClear.disabled = selected.length === 0;
+  const lockedLabel = getLockedExportAgentLabel();
+  const exportAgentLocked = Boolean(lockedLabel);
+  els.btnExportAgentClear.disabled = exportAgentLocked || selected.length === 0;
+
+  if (exportAgentLocked && lockedLabel) {
+    els.exportAgentBtn.textContent = `Agent celny: ${lockedLabel}`;
+    els.exportAgentBtn.disabled = true;
+    return;
+  }
 
   if (!exportAgentOptions.length) {
     els.exportAgentBtn.textContent = "Agent celny: Ładowanie…";
@@ -1792,6 +1819,7 @@ function updateExportAgentUi(): void {
 
 function renderExportAgentList(): void {
   const q = String(els.exportAgentSearch.value ?? "").trim().toLowerCase();
+  const selectedKeys = getExportAgentSelectionKeys();
   const items = q
     ? exportAgentOptions.filter((o) => o.name.toLowerCase().includes(q))
     : exportAgentOptions;
@@ -1811,7 +1839,7 @@ function renderExportAgentList(): void {
     input.type = "checkbox";
     input.className = "form-check-input";
     input.dataset.key = o.key;
-    input.checked = exportAgentSelectedKeys.has(o.key);
+    input.checked = selectedKeys.has(o.key);
 
     const span = document.createElement("span");
     span.textContent = o.name;
@@ -1869,9 +1897,14 @@ function setAvailableExportAgents(agents: unknown): void {
     if (!key || map.has(key)) continue;
     map.set(key, name);
   }
-  exportAgentOptions = Array.from(map.entries())
+  let options = Array.from(map.entries())
     .map(([key, name]) => ({ key, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const lockedKey = getLockedExportAgentKey();
+  if (lockedKey) {
+    options = options.filter((option) => option.key === lockedKey);
+  }
+  exportAgentOptions = options;
 
   const availableKeys = new Set(exportAgentOptions.map((o) => o.key));
   exportAgentSelectedKeys = new Set(
@@ -2353,7 +2386,10 @@ function getExportFilters(): ExportFilters {
 function updateExportFiltersUi(): void {
   const mrn = getExportMrnFilterValue();
   const f = getExportFilters();
-  const any = Boolean(mrn || f.importer || (f.agent && f.agent.length) || f.dzial);
+  const exportAgentLocked = Boolean(getLockedExportAgentKey());
+  const any = Boolean(
+    mrn || f.importer || (!exportAgentLocked && f.agent && f.agent.length) || f.dzial,
+  );
   els.btnExportFiltersClear.disabled = !any;
   els.btnExportFiltersToggle.classList.toggle("btn-outline-light", !any);
   els.btnExportFiltersToggle.classList.toggle("btn-outline-primary", any);
@@ -2375,6 +2411,7 @@ function renderExportActiveFilters(): void {
   const importer = String(els.exportFilterImporter?.value ?? "").trim();
   const dzial = String(els.exportFilterDzial?.value ?? "").trim();
   const agents = getSelectedExportAgents();
+  const exportAgentLocked = Boolean(getLockedExportAgentKey());
 
   const chips: ActiveFilterChip[] = [];
   if (mrn) {
@@ -2402,6 +2439,7 @@ function renderExportActiveFilters(): void {
   }
 
   for (const a of agents) {
+    if (exportAgentLocked) continue;
     chips.push({
       text: `Agent: ${a}`,
       ariaRemove: `Usuń filtr Agent: ${a}`,
@@ -4314,6 +4352,7 @@ els.exportAgentBtn.addEventListener("click", () => {
 });
 els.exportAgentSearch.addEventListener("input", () => renderExportAgentList());
 els.btnExportAgentClear.addEventListener("click", () => {
+  if (getLockedExportAgentKey()) return;
   exportAgentSelectedKeys.clear();
   updateExportAgentUi();
   renderExportAgentList();
@@ -4321,6 +4360,7 @@ els.btnExportAgentClear.addEventListener("click", () => {
   scheduleExportPreviewRefresh();
 });
 els.exportAgentList.addEventListener("change", (e) => {
+  if (getLockedExportAgentKey()) return;
   const target = e.target as HTMLInputElement | null;
   if (!target || target.tagName !== "INPUT" || target.type !== "checkbox") return;
   const key = String(target.dataset.key ?? "").trim();
@@ -4356,6 +4396,10 @@ void initAdminUi({
   onSessionChanged: () => {
     syncTabAccess();
     ensureAccessibleTab();
+    updateExportAgentUi();
+    renderExportAgentList();
+    updateExportFiltersUi();
+    if (state.tab === "export") void refreshExportPreview();
     updateAttentionAgentUi();
     renderAttentionAgentList();
     if (state.tab === "attention") void refreshAttention();

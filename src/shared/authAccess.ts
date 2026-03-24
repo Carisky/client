@@ -70,6 +70,14 @@ export const APP_PERMISSION_CATALOG = [
     category: "Eksport",
   },
   {
+    key: "EXPORT_VIEW_ALL",
+    label: "Widok wszystkich agentow",
+    description:
+      "W zakladce Eksport pozwala filtrowac i przegladac wpisy wszystkich agentow.",
+    category: "Eksport",
+    parentKey: "EXPORT_VIEW",
+  },
+  {
     key: "SETTINGS_VIEW",
     label: "Ustawienia",
     description: "Podglad ustawien lokalnych i zasobow aplikacji.",

@@ -160,6 +160,22 @@ function normalizeAgentKey(value: unknown): string {
   return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
+function getVisibleAgentKeys(visibleAgentNames: unknown[] | null | undefined): Set<string> {
+  return new Set(
+    (Array.isArray(visibleAgentNames) ? visibleAgentNames : [])
+      .map((value) => normalizeAgentKey(value))
+      .filter(Boolean),
+  );
+}
+
+function filterRowsByVisibleAgents<T extends { zglaszajacy?: unknown }>(
+  rows: T[],
+  visibleAgentKeys: Set<string>,
+): T[] {
+  if (!visibleAgentKeys.size) return rows;
+  return rows.filter((row) => visibleAgentKeys.has(normalizeAgentKey(row.zglaszajacy)));
+}
+
 function loadAgentDzialMap(): { map: Map<string, string>; info: AgentDzialInfo } {
   const filePath = ensureAgentDzialMapFile();
   const info: AgentDzialInfo = { filePath, exists: false, rowCount: 0, modifiedAt: null };
@@ -2215,6 +2231,7 @@ export async function previewValidationWynikiExport(params: {
   period: string;
   mrn?: string | null;
   grouping?: unknown;
+  visibleAgentNames?: unknown[] | null;
   filters?: {
     importer?: string | null;
     agent?: string[] | string | null;
@@ -2232,7 +2249,11 @@ export async function previewValidationWynikiExport(params: {
   const range = toYmdRange(params.period);
   const { grouping } = getValidationGroupingConfig(params);
   const anchor = range.start;
-  const rows = await queryValidationRepresentativeRows(client, range);
+  const visibleAgentKeys = getVisibleAgentKeys(params.visibleAgentNames);
+  const rows = filterRowsByVisibleAgents(
+    await queryValidationRepresentativeRows(client, range),
+    visibleAgentKeys,
+  );
   const manual = await getValidationManualSet(client);
   const { map: agentDzialMap, info: agentDzialInfo } = loadAgentDzialMap();
 
@@ -2632,6 +2653,7 @@ export async function exportValidationWynikiToXlsx(params: {
   period: string;
   mrn?: string | null;
   grouping?: unknown;
+  visibleAgentNames?: unknown[] | null;
   filters?: {
     importer?: string | null;
     agent?: string[] | string | null;
@@ -2645,7 +2667,11 @@ export async function exportValidationWynikiToXlsx(params: {
   const range = toYmdRange(params.period);
   const { grouping } = getValidationGroupingConfig(params);
   const anchor = range.start;
-  const rows = await queryValidationRepresentativeRows(client, range);
+  const visibleAgentKeys = getVisibleAgentKeys(params.visibleAgentNames);
+  const rows = filterRowsByVisibleAgents(
+    await queryValidationRepresentativeRows(client, range),
+    visibleAgentKeys,
+  );
   const manual = await getValidationManualSet(client);
   const { map: agentDzialMap, info: agentDzialInfo } = loadAgentDzialMap();
 
