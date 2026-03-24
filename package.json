@@ -7,14 +7,16 @@
   "private": true,
   "scripts": {
     "start": "electron-forge start",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
+    "package": "node scripts/run-forge-with-postgres.js package",
+    "make": "node scripts/run-forge-with-postgres.js make",
     "make:remote": "node scripts/make-remote.js",
     "publish": "electron-forge publish",
     "lint": "eslint --no-error-on-unmatched-pattern --ext .ts,.tsx \"src/**/*.ts\" \"src/**/*.tsx\"",
     "raport:schema": "node scripts/generate-raport-schema.js",
     "prisma:generate": "prisma generate",
-    "postinstall": "prisma generate"
+    "prisma:generate:postgres": "node scripts/run-prisma-postgres-generate.js",
+    "prisma:generate:postgres:prod": "node scripts/run-prisma-postgres-generate.js prod",
+    "postinstall": "prisma generate && node scripts/run-prisma-postgres-generate.js"
   },
   "keywords": [],
   "author": {
@@ -42,16 +44,19 @@
     "eslint-plugin-import": "^2.32.0",
     "fork-ts-checker-webpack-plugin": "^7.3.0",
     "node-loader": "^2.1.0",
-    "prisma": "^7.3.0",
+    "prisma": "7.2.0",
     "style-loader": "^3.3.4",
     "ts-loader": "^9.5.4",
     "typescript": "^5.5.4"
   },
   "dependencies": {
-    "@prisma/adapter-better-sqlite3": "^7.3.0",
-    "@prisma/client": "^7.3.0",
+    "@prisma/adapter-better-sqlite3": "7.2.0",
+    "@prisma/adapter-pg": "7.2.0",
+    "@prisma/client": "7.2.0",
     "bootstrap": "^5.3.3",
+    "dotenv": "^17.2.3",
     "electron-squirrel-startup": "^1.0.1",
+    "pg": "^8.16.3",
     "xlsx": "^0.18.5"
   }
 }

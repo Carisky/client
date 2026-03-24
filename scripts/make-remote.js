@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const childProcess = require('child_process');
+const { runPrismaPostgresGenerate } = require('./prisma-postgres-utils');
 
 function exec(cmd, opts = {}) {
   return childProcess.execSync(cmd, { stdio: 'pipe', encoding: 'utf8', ...opts }).trim();
@@ -210,6 +211,8 @@ function writeResourcesManifest({ root, version, branch }) {
 async function main() {
   const root = path.resolve(__dirname, '..');
   process.chdir(root);
+
+  runPrismaPostgresGenerate('prod', { cwd: root });
 
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const version = String(pkg.version || '').trim();

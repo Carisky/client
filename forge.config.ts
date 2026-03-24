@@ -15,7 +15,7 @@ import { rendererConfig } from './webpack.renderer.config';
 const config: ForgeConfig = {
   packagerConfig: {
     icon: path.resolve(__dirname, 'resources', 'icon.ico'),
-    extraResource: [path.resolve(__dirname, 'resources')],
+    extraResource: [path.resolve(__dirname, 'resources'), path.resolve(__dirname, '.env')],
     asar: {
       unpack:
         '{**/*.node,**/.prisma/**,**/node_modules/.prisma/**,**/node_modules/@prisma/**}',
