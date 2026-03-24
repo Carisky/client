@@ -1459,19 +1459,51 @@ details.row-accordion > summary::-webkit-details-marker {
   white-space: nowrap;
 }
 
+.auth-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(3, 10, 9, 0.58);
+  backdrop-filter: blur(10px);
+}
+
+.auth-modal-backdrop.hidden {
+  display: none;
+}
+
+.auth-modal-card {
+  width: min(940px, calc(100vw - 32px));
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 20px;
+  background: rgba(var(--panel-rgb), 0.96);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  animation: fadeUp 160ms ease-out both;
+}
+
+.auth-modal-status {
+  margin-top: 0;
+}
+
+.update-card-body > .admin-token-card:first-child,
+.update-card-body > .admin-block:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 #tab-admin {
   overflow: auto;
 }
 
-.admin-layout {
+.admin-shell {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-
-.admin-top-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
   gap: 14px;
 }
 
@@ -1485,6 +1517,12 @@ details.row-accordion > summary::-webkit-details-marker {
   gap: 14px;
 }
 
+.admin-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .admin-card-head {
   display: flex;
   align-items: flex-start;
@@ -1492,8 +1530,35 @@ details.row-accordion > summary::-webkit-details-marker {
   gap: 12px;
 }
 
+.admin-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .admin-muted {
   margin-top: 4px;
+}
+
+.admin-session-meta {
+  margin-top: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.admin-pill-section + .admin-pill-section {
+  margin-top: 10px;
+}
+
+.admin-pill-label {
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.28px;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .admin-block {
@@ -1519,6 +1584,19 @@ details.row-accordion > summary::-webkit-details-marker {
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 14px;
   background: rgba(var(--panel-rgb), 0.35);
+}
+
+.admin-section {
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.admin-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .admin-form-grid {
@@ -1682,6 +1760,28 @@ details.row-accordion > summary::-webkit-details-marker {
 .admin-list-meta {
   margin-top: 10px;
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-list-meta-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.admin-list-meta-label {
+  min-width: 66px;
+  padding-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.admin-list-meta-pills {
+  display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
@@ -1696,7 +1796,6 @@ details.row-accordion > summary::-webkit-details-marker {
 }
 
 @media (max-width: 1280px) {
-  .admin-top-grid,
   .admin-management-grid {
     grid-template-columns: 1fr;
   }
@@ -1718,13 +1817,37 @@ details.row-accordion > summary::-webkit-details-marker {
     text-align: left;
   }
 
-  .auth-summary {
-    justify-content: space-between;
+  .auth-summary,
+  .admin-card-head,
+  .admin-section-head {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .admin-auth-grid,
   .admin-form-grid,
   .admin-checkbox-list {
     grid-template-columns: 1fr;
+  }
+
+  .admin-toolbar {
+    justify-content: stretch;
+  }
+
+  .admin-list-card-top,
+  .admin-list-meta-group {
+    flex-direction: column;
+  }
+
+  .admin-list-meta-label {
+    min-width: 0;
+    padding-top: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .auth-modal-card {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
   }
 }

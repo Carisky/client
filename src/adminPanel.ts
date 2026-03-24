@@ -15,6 +15,7 @@ import type {
 type InitOptions = {
   setBusy: (isBusy: boolean) => void;
   onSessionChanged?: (session: AuthSessionState) => void;
+  openAdminPanel?: () => void;
 };
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -51,7 +52,10 @@ function authFieldErrors<T>(
 
 const els = {
   authSummaryText: byId<HTMLElement>("auth-summary-text"),
+  btnAuthOpenModal: byId<HTMLButtonElement>("btn-auth-open-admin"),
   btnAuthLogout: byId<HTMLButtonElement>("btn-auth-logout"),
+  authModalBackdrop: byId<HTMLElement>("auth-modal-backdrop"),
+  btnAuthCloseModal: byId<HTMLButtonElement>("btn-auth-close-modal"),
   btnAdminSessionRefresh: byId<HTMLButtonElement>("btn-admin-session-refresh"),
   btnAdminCopyToken: byId<HTMLButtonElement>("btn-admin-copy-token"),
   btnAdminLogoutInline: byId<HTMLButtonElement>("btn-admin-logout-inline"),
@@ -59,6 +63,8 @@ const els = {
   adminAuthStatus: byId<HTMLElement>("admin-auth-status"),
   adminNoAccessCard: byId<HTMLElement>("admin-no-access-card"),
   adminPanelWrap: byId<HTMLElement>("admin-panel-wrap"),
+  adminPanelTitle: byId<HTMLElement>("admin-panel-title"),
+  adminPanelSubtitle: byId<HTMLElement>("admin-panel-subtitle"),
   adminIssuedTokenCard: byId<HTMLElement>("admin-issued-token-card"),
   adminIssuedTokenMeta: byId<HTMLElement>("admin-issued-token-meta"),
   adminIssuedTokenValue: byId<HTMLElement>("admin-issued-token-value"),
@@ -146,9 +152,14 @@ let initialized = false;
 let sessionState: AuthSessionState | null = null;
 let adminPanelData: AdminPanelData | null = null;
 let lastIssuedToken: IssuedOneTimeToken | null = null;
+let isAuthModalOpen = false;
 
 function setStatus(el: HTMLElement, text: string) {
   el.textContent = text;
+}
+
+function setAuthStatus(text: string) {
+  setStatus(els.adminAuthStatus, text);
 }
 
 function setFieldErrors(
@@ -193,6 +204,54 @@ function canAccessAdminPanel(): boolean {
   );
 }
 
+function isAuthModalForced(): boolean {
+  return Boolean(
+    sessionState?.bootstrapRequired ||
+      !sessionState?.isAuthenticated ||
+      sessionState?.requiresPasswordSetup,
+  );
+}
+
+function focusAuthModalPrimaryField() {
+  if (els.adminBootstrapCard && !els.adminBootstrapCard.classList.contains("hidden")) {
+    els.adminBootstrapLogin.focus();
+    return;
+  }
+
+  if (
+    els.adminPasswordSetupCard &&
+    !els.adminPasswordSetupCard.classList.contains("hidden")
+  ) {
+    els.adminPasswordSetupPassword.focus();
+    return;
+  }
+
+  if (els.adminLoginCard && !els.adminLoginCard.classList.contains("hidden")) {
+    els.adminPasswordLoginLogin.focus();
+  }
+}
+
+function syncAuthModal() {
+  const forced = isAuthModalForced();
+  els.btnAuthCloseModal.classList.toggle("hidden", forced);
+  els.authModalBackdrop.classList.toggle(
+    "hidden",
+    !(forced || isAuthModalOpen),
+  );
+}
+
+function openAuthModal() {
+  isAuthModalOpen = true;
+  syncAuthModal();
+  focusAuthModalPrimaryField();
+}
+
+function closeAuthModal() {
+  if (isAuthModalForced()) return;
+  isAuthModalOpen = false;
+  syncAuthModal();
+}
+
 function canManageUser(user: AdminUserSummary): boolean {
   const actorRole = sessionState?.user?.systemRole;
   if (!canAccessAdminPanel() || !actorRole) return false;
@@ -204,18 +263,23 @@ function canManageUser(user: AdminUserSummary): boolean {
 function renderAuthSummary() {
   if (!sessionState) {
     els.authSummaryText.textContent = "Sprawdzanie sesji...";
+    els.btnAuthOpenModal.classList.add("hidden");
     els.btnAuthLogout.classList.add("hidden");
     return;
   }
 
   if (sessionState.bootstrapRequired) {
-    els.authSummaryText.textContent = "Bootstrap Super Admin wymagany";
+    els.authSummaryText.textContent = "Wymagana pierwsza konfiguracja";
+    els.btnAuthOpenModal.textContent = "Skonfiguruj";
+    els.btnAuthOpenModal.classList.remove("hidden");
     els.btnAuthLogout.classList.add("hidden");
     return;
   }
 
   if (!sessionState.isAuthenticated || !sessionState.user) {
-    els.authSummaryText.textContent = "Nie zalogowano";
+    els.authSummaryText.textContent = "Brak aktywnej sesji";
+    els.btnAuthOpenModal.textContent = "Zaloguj";
+    els.btnAuthOpenModal.classList.remove("hidden");
     els.btnAuthLogout.classList.add("hidden");
     return;
   }
@@ -225,16 +289,29 @@ function renderAuthSummary() {
     ? " - ustaw nowe haslo"
     : "";
   els.authSummaryText.textContent = `${sessionState.user.fullName} (${sessionState.user.login}) - ${roleLabel}${suffix}`;
+  if (sessionState.requiresPasswordSetup) {
+    els.btnAuthOpenModal.textContent = "Dokoncz";
+    els.btnAuthOpenModal.classList.remove("hidden");
+  } else if (lastIssuedToken?.token) {
+    els.btnAuthOpenModal.textContent = "Token";
+    els.btnAuthOpenModal.classList.remove("hidden");
+  } else {
+    els.btnAuthOpenModal.classList.add("hidden");
+  }
   els.btnAuthLogout.classList.remove("hidden");
 }
 
 function renderIssuedToken() {
   const token = lastIssuedToken;
   els.adminIssuedTokenCard.classList.toggle("hidden", !token);
-  if (!token) return;
+  if (!token) {
+    renderAuthSummary();
+    return;
+  }
 
   els.adminIssuedTokenMeta.textContent = `${token.fullName} (${token.login}) - wygasa ${formatDateTime(token.expiresAt)}`;
   els.adminIssuedTokenValue.textContent = token.token;
+  renderAuthSummary();
 }
 
 function renderSessionBlock() {
@@ -250,7 +327,7 @@ function renderSessionBlock() {
   );
   els.adminSessionCard.classList.toggle(
     "hidden",
-    !(session?.isAuthenticated && session?.user),
+    !(session?.isAuthenticated && session?.user && !session.requiresPasswordSetup),
   );
   els.adminNoAccessCard.classList.toggle(
     "hidden",
@@ -263,17 +340,30 @@ function renderSessionBlock() {
   );
   els.adminPanelWrap.classList.toggle("hidden", !canAccessAdminPanel());
 
-  if (!session?.isAuthenticated || !session.user) {
+  if (!session?.isAuthenticated || !session.user || session.requiresPasswordSetup) {
+    els.adminPanelTitle.textContent = "Konto";
+    els.adminPanelSubtitle.textContent =
+      "Szczegoly sesji i przypisanych uprawnien.";
     els.adminSessionMeta.textContent = "-";
     els.adminSessionGroups.innerHTML = "";
     els.adminSessionPermissions.innerHTML = "";
     return;
   }
 
+  if (session.user.canAccessAdminPanel) {
+    els.adminPanelTitle.textContent = "Zarzadzanie dostepem";
+    els.adminPanelSubtitle.textContent =
+      "Konta, grupy uprawnien i wydawanie nowych tokenow startowych.";
+  } else {
+    els.adminPanelTitle.textContent = "Konto";
+    els.adminPanelSubtitle.textContent =
+      "Szczegoly sesji i przypisanych uprawnien.";
+  }
+
   els.adminSessionMeta.textContent = `${session.user.fullName} (${session.user.login}) - ${SYSTEM_ROLE_LABELS[session.user.systemRole]}`;
   renderPills(
     els.adminSessionGroups,
-    session.user.groupNames.map((groupName) => `Grupa: ${groupName}`),
+    session.user.groupNames,
     "Brak grup",
   );
   renderPills(
@@ -408,7 +498,7 @@ function renderUserList() {
       ];
 
       const groups = user.groupNames.length
-        ? user.groupNames.map((groupName) => `Grupa: ${groupName}`)
+        ? user.groupNames
         : ["Brak grup"];
       const permissions = user.effectivePermissions.length
         ? user.effectivePermissions
@@ -441,12 +531,22 @@ function renderUserList() {
             </div>
           </div>
           <div class="admin-list-meta">
-            ${groups
-              .map((value) => `<span class="pill">${escapeHtml(value)}</span>`)
-              .join("")}
-            ${permissions
-              .map((value) => `<span class="pill">${escapeHtml(value)}</span>`)
-              .join("")}
+            <div class="admin-list-meta-group">
+              <div class="admin-list-meta-label">Grupy</div>
+              <div class="admin-list-meta-pills">
+                ${groups
+                  .map((value) => `<span class="pill">${escapeHtml(value)}</span>`)
+                  .join("")}
+              </div>
+            </div>
+            <div class="admin-list-meta-group">
+              <div class="admin-list-meta-label">Dostepy</div>
+              <div class="admin-list-meta-pills">
+                ${permissions
+                  .map((value) => `<span class="pill">${escapeHtml(value)}</span>`)
+                  .join("")}
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -480,12 +580,17 @@ function renderGroupList() {
             </div>
           </div>
           <div class="admin-list-meta">
-            ${group.permissionKeys
-              .map(
-                (permissionKey) =>
-                  `<span class="pill">${escapeHtml(permissionKey)}</span>`,
-              )
-              .join("")}
+            <div class="admin-list-meta-group">
+              <div class="admin-list-meta-label">Dostepy</div>
+              <div class="admin-list-meta-pills">
+                ${group.permissionKeys
+                  .map(
+                    (permissionKey) =>
+                      `<span class="pill">${escapeHtml(permissionKey)}</span>`,
+                  )
+                  .join("")}
+              </div>
+            </div>
           </div>
         </div>
       `,
@@ -531,7 +636,7 @@ async function refreshAdminData() {
   const result = await runWithBusy(() => window.api.getAdminPanelData());
   if (!result.ok) {
     adminPanelData = null;
-    setStatus(els.adminAuthStatus, authErrorMessage(result));
+    setAuthStatus(authErrorMessage(result));
     renderAdminData();
     return;
   }
@@ -546,6 +651,7 @@ async function refreshSession(options?: { refreshAdmin?: boolean }) {
   renderAuthSummary();
   renderSessionBlock();
   renderIssuedToken();
+  syncAuthModal();
   initOptions?.onSessionChanged?.(session);
 
   if (options?.refreshAdmin) {
@@ -597,7 +703,7 @@ async function handleBootstrapSubmit(event: Event) {
       },
       authFieldErrors(result),
     );
-    setStatus(els.adminAuthStatus, authErrorMessage(result));
+    setAuthStatus(authErrorMessage(result));
     return;
   }
 
@@ -606,11 +712,11 @@ async function handleBootstrapSubmit(event: Event) {
   els.adminTokenLoginLogin.value = result.data.login;
   els.adminTokenLoginToken.value = result.data.token;
   els.adminBootstrapForm.reset();
-  setStatus(
-    els.adminAuthStatus,
+  setAuthStatus(
     "Super admin utworzony. Zaloguj sie jednorazowym tokenem i ustaw haslo.",
   );
   await refreshSession({ refreshAdmin: true });
+  openAuthModal();
 }
 
 async function handlePasswordLoginSubmit(event: Event) {
@@ -638,13 +744,19 @@ async function handlePasswordLoginSubmit(event: Event) {
       },
       authFieldErrors(result),
     );
-    setStatus(els.adminAuthStatus, authErrorMessage(result));
+    setAuthStatus(authErrorMessage(result));
     return;
   }
 
+  lastIssuedToken = null;
+  renderIssuedToken();
   els.adminPasswordLoginPassword.value = "";
-  setStatus(els.adminAuthStatus, "Zalogowano.");
+  setAuthStatus("Zalogowano.");
   await refreshSession({ refreshAdmin: true });
+  if (canAccessAdminPanel()) {
+    initOptions?.openAdminPanel?.();
+  }
+  closeAuthModal();
 }
 
 async function handleTokenLoginSubmit(event: Event) {
@@ -672,16 +784,16 @@ async function handleTokenLoginSubmit(event: Event) {
       },
       authFieldErrors(result),
     );
-    setStatus(els.adminAuthStatus, authErrorMessage(result));
+    setAuthStatus(authErrorMessage(result));
     return;
   }
 
+  lastIssuedToken = null;
+  renderIssuedToken();
   els.adminPasswordSetupPassword.focus();
-  setStatus(
-    els.adminAuthStatus,
-    "Token zaakceptowany. Ustaw nowe haslo, aby zakonczyc logowanie.",
-  );
+  setAuthStatus("Token zaakceptowany. Ustaw nowe haslo, aby zakonczyc logowanie.");
   await refreshSession({ refreshAdmin: true });
+  openAuthModal();
 }
 
 async function handlePasswordSetupSubmit(event: Event) {
@@ -721,13 +833,19 @@ async function handlePasswordSetupSubmit(event: Event) {
       },
       authFieldErrors(result),
     );
-    setStatus(els.adminAuthStatus, authErrorMessage(result));
+    setAuthStatus(authErrorMessage(result));
     return;
   }
 
+  lastIssuedToken = null;
+  renderIssuedToken();
   els.adminPasswordSetupForm.reset();
-  setStatus(els.adminAuthStatus, "Haslo zapisane.");
+  setAuthStatus("Haslo zapisane.");
   await refreshSession({ refreshAdmin: true });
+  if (canAccessAdminPanel()) {
+    initOptions?.openAdminPanel?.();
+  }
+  closeAuthModal();
 }
 
 async function handleLogout() {
@@ -736,8 +854,9 @@ async function handleLogout() {
   resetUserForm();
   resetGroupForm();
   await runWithBusy(() => window.api.logout());
-  setStatus(els.adminAuthStatus, "Wylogowano.");
+  setAuthStatus("Wylogowano.");
   await refreshSession({ refreshAdmin: true });
+  openAuthModal();
 }
 
 async function handleUserSave(event: Event) {
@@ -779,6 +898,9 @@ async function handleUserSave(event: Event) {
       : "Uzytkownik zapisany.",
   );
   renderIssuedToken();
+  if (result.data.issuedToken) {
+    openAuthModal();
+  }
   await refreshAdminData();
 }
 
@@ -838,14 +960,14 @@ async function handleRotateToken(userId: string) {
   lastIssuedToken = result.data;
   renderIssuedToken();
   setStatus(els.adminUserStatus, `Nowy token wydany dla ${user.fullName}.`);
+  openAuthModal();
   await refreshAdminData();
 }
 
 async function copyLastIssuedToken() {
   if (!lastIssuedToken?.token) return;
   const result = await window.api.writeClipboardText(lastIssuedToken.token);
-  setStatus(
-    els.adminAuthStatus,
+  setAuthStatus(
     result.ok ? "Token skopiowany do schowka." : "Nie udalo sie skopiowac tokena.",
   );
 }
@@ -853,6 +975,22 @@ async function copyLastIssuedToken() {
 function bindEvents() {
   if (initialized) return;
   initialized = true;
+
+  els.btnAuthOpenModal.addEventListener("click", () => {
+    openAuthModal();
+  });
+  els.btnAuthCloseModal.addEventListener("click", () => {
+    closeAuthModal();
+  });
+  els.authModalBackdrop.addEventListener("click", (event) => {
+    if (event.target !== els.authModalBackdrop) return;
+    closeAuthModal();
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (els.authModalBackdrop.classList.contains("hidden")) return;
+    closeAuthModal();
+  });
 
   els.btnAdminSessionRefresh.addEventListener("click", () => {
     void refreshSession({ refreshAdmin: true });
@@ -925,6 +1063,7 @@ export async function initAdminUi(options: InitOptions): Promise<void> {
   initOptions = options;
   bindEvents();
   renderIssuedToken();
+  syncAuthModal();
   await refreshSession({ refreshAdmin: true });
   resetUserForm();
   resetGroupForm();

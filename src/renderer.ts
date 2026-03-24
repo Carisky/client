@@ -29,6 +29,7 @@ const els = {
   ) as HTMLButtonElement,
   tabExportBtn: document.getElementById("tab-btn-export") as HTMLButtonElement,
   tabAdminBtn: document.getElementById("tab-btn-admin") as HTMLButtonElement,
+  tabAdminLabel: document.getElementById("tab-btn-admin-label") as HTMLElement,
   tabSettingsBtn: document.getElementById(
     "tab-btn-settings",
   ) as HTMLButtonElement,
@@ -57,9 +58,6 @@ const els = {
   meta: document.getElementById("meta") as HTMLElement,
   appVersion: document.getElementById("app-version") as HTMLElement,
   tabsLogo: document.getElementById("tabs-logo-img") as HTMLImageElement,
-  btnAuthOpenAdmin: document.getElementById(
-    "btn-auth-open-admin",
-  ) as HTMLButtonElement,
 
   updateNudge: document.getElementById("update-nudge") as HTMLElement,
   updateNudgeText: document.getElementById("update-nudge-text") as HTMLElement,
@@ -532,8 +530,22 @@ function errorMessage(e: unknown): string {
   }
 }
 
+function canOpenAccountTab(): boolean {
+  const session = getCurrentAuthSession();
+  return Boolean(session?.isAuthenticated && !session.requiresPasswordSetup);
+}
+
+function canOpenManagementTab(): boolean {
+  const session = getCurrentAuthSession();
+  return Boolean(
+    session?.isAuthenticated &&
+      !session.requiresPasswordSetup &&
+      session.user?.canAccessAdminPanel,
+  );
+}
+
 function canAccessTab(name: TabName): boolean {
-  if (name === "admin") return true;
+  if (name === "admin") return canOpenAccountTab();
   if (name === "import") return hasAppPermission("REPORT_IMPORT");
   if (name === "preview") return hasAppPermission("REPORT_VIEW");
   if (name === "dashboard") return hasAppPermission("REPORT_DUPLICATES_VIEW");
@@ -560,7 +572,10 @@ function syncTabAccess() {
   setTabAvailability(els.tabValidationBtn, canAccessTab("validation"));
   setTabAvailability(els.tabAttentionBtn, canAccessTab("attention"));
   setTabAvailability(els.tabExportBtn, canAccessTab("export"));
-  setTabAvailability(els.tabAdminBtn, true, true);
+  setTabAvailability(els.tabAdminBtn, canAccessTab("admin"));
+  els.tabAdminLabel.textContent = canOpenManagementTab()
+    ? "Zarzadzanie"
+    : "Konto";
   setTabAvailability(els.tabSettingsBtn, canAccessTab("settings"));
 }
 
@@ -573,8 +588,9 @@ function getDefaultAccessibleTab(): TabName {
     "attention",
     "export",
     "settings",
+    "admin",
   ];
-  return orderedTabs.find((tab) => canAccessTab(tab)) ?? "admin";
+  return orderedTabs.find((tab) => canAccessTab(tab)) ?? "import";
 }
 
 function ensureAccessibleTab() {
@@ -583,9 +599,7 @@ function ensureAccessibleTab() {
 }
 
 function setTab(name: TabName) {
-  if (!canAccessTab(name)) {
-    name = "admin";
-  }
+  name = canAccessTab(name) ? name : getDefaultAccessibleTab();
 
   state.tab = name;
 
@@ -3692,7 +3706,6 @@ els.tabAttentionBtn.addEventListener("click", () => setTab("attention"));
 els.tabExportBtn.addEventListener("click", () => setTab("export"));
 els.tabAdminBtn.addEventListener("click", () => setTab("admin"));
 els.tabSettingsBtn.addEventListener("click", () => setTab("settings"));
-els.btnAuthOpenAdmin.addEventListener("click", () => setTab("admin"));
 
 els.importBtn.addEventListener("click", () => void importRaport());
 
@@ -4296,13 +4309,16 @@ if (!updateStatusUnsub) {
 setupCopyToClipboard();
 
 syncTabAccess();
-setTab("admin");
+setTab(getDefaultAccessibleTab());
 void initAdminUi({
   setBusy,
   onSessionChanged: () => {
     syncTabAccess();
     ensureAccessibleTab();
     void refreshMeta();
+  },
+  openAdminPanel: () => {
+    setTab("admin");
   },
 }).catch((e: unknown) => {
   els.meta.textContent = `Auth error: ${errorMessage(e)}`;
