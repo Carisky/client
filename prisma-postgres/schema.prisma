@@ -7,3 +7,74 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum AuthSystemRole {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+model AuthUser {
+  id              String                  @id @default(uuid()) @db.Uuid
+  login           String                  @unique @db.VarChar(64)
+  fullName        String                  @db.VarChar(160)
+  systemRole      AuthSystemRole          @default(USER)
+  isActive        Boolean                 @default(true)
+  passwordHash    String?                 @db.VarChar(255)
+  passwordSalt    String?                 @db.VarChar(255)
+  passwordSetAt   DateTime?
+  mustSetPassword Boolean                 @default(true)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  groups          AuthUserPermissionGroup[]
+  tokens          AuthOneTimeToken[]      @relation("AuthUserTokens")
+  issuedTokens    AuthOneTimeToken[]      @relation("AuthIssuedTokens")
+}
+
+model AuthPermissionGroup {
+  id          String                      @id @default(uuid()) @db.Uuid
+  name        String                      @db.VarChar(120)
+  slug        String                      @unique @db.VarChar(120)
+  description String?                     @db.VarChar(255)
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  permissions AuthPermissionGroupAccess[]
+  users       AuthUserPermissionGroup[]
+}
+
+model AuthPermissionGroupAccess {
+  groupId       String              @db.Uuid
+  permissionKey String              @db.VarChar(80)
+  createdAt     DateTime            @default(now())
+  group         AuthPermissionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, permissionKey])
+  @@index([permissionKey])
+}
+
+model AuthUserPermissionGroup {
+  userId     String              @db.Uuid
+  groupId    String              @db.Uuid
+  assignedAt DateTime            @default(now())
+  user       AuthUser            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group      AuthPermissionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+  @@index([groupId])
+}
+
+model AuthOneTimeToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  issuedById   String?   @db.Uuid
+  tokenHash    String    @unique @db.VarChar(255)
+  tokenPreview String    @db.VarChar(32)
+  expiresAt    DateTime
+  usedAt       DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  user         AuthUser  @relation("AuthUserTokens", fields: [userId], references: [id], onDelete: Cascade)
+  issuedBy     AuthUser? @relation("AuthIssuedTokens", fields: [issuedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, expiresAt])
+}

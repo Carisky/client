@@ -17,4 +17,28 @@ import * as Prisma from './internal/prismaNamespaceBrowser'
 export { Prisma }
 export * as $Enums from './enums'
 export * from './enums';
-
+/**
+ * Model AuthUser
+ * 
+ */
+export type AuthUser = Prisma.AuthUserModel
+/**
+ * Model AuthPermissionGroup
+ * 
+ */
+export type AuthPermissionGroup = Prisma.AuthPermissionGroupModel
+/**
+ * Model AuthPermissionGroupAccess
+ * 
+ */
+export type AuthPermissionGroupAccess = Prisma.AuthPermissionGroupAccessModel
+/**
+ * Model AuthUserPermissionGroup
+ * 
+ */
+export type AuthUserPermissionGroup = Prisma.AuthUserPermissionGroupModel
+/**
+ * Model AuthOneTimeToken
+ * 
+ */
+export type AuthOneTimeToken = Prisma.AuthOneTimeTokenModel

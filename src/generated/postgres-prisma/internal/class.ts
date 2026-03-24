@@ -20,7 +20,7 @@ const config: runtime.GetPrismaClientConfig = {
   "clientVersion": "7.2.0",
   "engineVersion": "0c8ef2ce45c83248ab3df073180d5eda9e8be7a3",
   "activeProvider": "postgresql",
-  "inlineSchema": "generator client {\n  provider   = \"prisma-client\"\n  output     = \"../src/generated/postgres-prisma\"\n  engineType = \"client\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n}\n",
+  "inlineSchema": "generator client {\n  provider   = \"prisma-client\"\n  output     = \"../src/generated/postgres-prisma\"\n  engineType = \"client\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n}\n\nenum AuthSystemRole {\n  SUPER_ADMIN\n  ADMIN\n  USER\n}\n\nmodel AuthUser {\n  id              String                    @id @default(uuid()) @db.Uuid\n  login           String                    @unique @db.VarChar(64)\n  fullName        String                    @db.VarChar(160)\n  systemRole      AuthSystemRole            @default(USER)\n  isActive        Boolean                   @default(true)\n  passwordHash    String?                   @db.VarChar(255)\n  passwordSalt    String?                   @db.VarChar(255)\n  passwordSetAt   DateTime?\n  mustSetPassword Boolean                   @default(true)\n  createdAt       DateTime                  @default(now())\n  updatedAt       DateTime                  @updatedAt\n  groups          AuthUserPermissionGroup[]\n  tokens          AuthOneTimeToken[]        @relation(\"AuthUserTokens\")\n  issuedTokens    AuthOneTimeToken[]        @relation(\"AuthIssuedTokens\")\n}\n\nmodel AuthPermissionGroup {\n  id          String                      @id @default(uuid()) @db.Uuid\n  name        String                      @db.VarChar(120)\n  slug        String                      @unique @db.VarChar(120)\n  description String?                     @db.VarChar(255)\n  createdAt   DateTime                    @default(now())\n  updatedAt   DateTime                    @updatedAt\n  permissions AuthPermissionGroupAccess[]\n  users       AuthUserPermissionGroup[]\n}\n\nmodel AuthPermissionGroupAccess {\n  groupId       String              @db.Uuid\n  permissionKey String              @db.VarChar(80)\n  createdAt     DateTime            @default(now())\n  group         AuthPermissionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)\n\n  @@id([groupId, permissionKey])\n  @@index([permissionKey])\n}\n\nmodel AuthUserPermissionGroup {\n  userId     String              @db.Uuid\n  groupId    String              @db.Uuid\n  assignedAt DateTime            @default(now())\n  user       AuthUser            @relation(fields: [userId], references: [id], onDelete: Cascade)\n  group      AuthPermissionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)\n\n  @@id([userId, groupId])\n  @@index([groupId])\n}\n\nmodel AuthOneTimeToken {\n  id           String    @id @default(uuid()) @db.Uuid\n  userId       String    @db.Uuid\n  issuedById   String?   @db.Uuid\n  tokenHash    String    @unique @db.VarChar(255)\n  tokenPreview String    @db.VarChar(32)\n  expiresAt    DateTime\n  usedAt       DateTime?\n  revokedAt    DateTime?\n  createdAt    DateTime  @default(now())\n  user         AuthUser  @relation(\"AuthUserTokens\", fields: [userId], references: [id], onDelete: Cascade)\n  issuedBy     AuthUser? @relation(\"AuthIssuedTokens\", fields: [issuedById], references: [id], onDelete: SetNull)\n\n  @@index([userId, expiresAt])\n}\n",
   "runtimeDataModel": {
     "models": {},
     "enums": {},
@@ -28,7 +28,7 @@ const config: runtime.GetPrismaClientConfig = {
   }
 }
 
-config.runtimeDataModel = JSON.parse("{\"models\":{},\"enums\":{},\"types\":{}}")
+config.runtimeDataModel = JSON.parse("{\"models\":{\"AuthUser\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"login\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"fullName\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"systemRole\",\"kind\":\"enum\",\"type\":\"AuthSystemRole\"},{\"name\":\"isActive\",\"kind\":\"scalar\",\"type\":\"Boolean\"},{\"name\":\"passwordHash\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"passwordSalt\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"passwordSetAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"mustSetPassword\",\"kind\":\"scalar\",\"type\":\"Boolean\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"groups\",\"kind\":\"object\",\"type\":\"AuthUserPermissionGroup\",\"relationName\":\"AuthUserToAuthUserPermissionGroup\"},{\"name\":\"tokens\",\"kind\":\"object\",\"type\":\"AuthOneTimeToken\",\"relationName\":\"AuthUserTokens\"},{\"name\":\"issuedTokens\",\"kind\":\"object\",\"type\":\"AuthOneTimeToken\",\"relationName\":\"AuthIssuedTokens\"}],\"dbName\":null},\"AuthPermissionGroup\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"name\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"slug\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"description\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"permissions\",\"kind\":\"object\",\"type\":\"AuthPermissionGroupAccess\",\"relationName\":\"AuthPermissionGroupToAuthPermissionGroupAccess\"},{\"name\":\"users\",\"kind\":\"object\",\"type\":\"AuthUserPermissionGroup\",\"relationName\":\"AuthPermissionGroupToAuthUserPermissionGroup\"}],\"dbName\":null},\"AuthPermissionGroupAccess\":{\"fields\":[{\"name\":\"groupId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"permissionKey\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"group\",\"kind\":\"object\",\"type\":\"AuthPermissionGroup\",\"relationName\":\"AuthPermissionGroupToAuthPermissionGroupAccess\"}],\"dbName\":null},\"AuthUserPermissionGroup\":{\"fields\":[{\"name\":\"userId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"groupId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"assignedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"user\",\"kind\":\"object\",\"type\":\"AuthUser\",\"relationName\":\"AuthUserToAuthUserPermissionGroup\"},{\"name\":\"group\",\"kind\":\"object\",\"type\":\"AuthPermissionGroup\",\"relationName\":\"AuthPermissionGroupToAuthUserPermissionGroup\"}],\"dbName\":null},\"AuthOneTimeToken\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"userId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"issuedById\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"tokenHash\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"tokenPreview\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"expiresAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"usedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"revokedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"user\",\"kind\":\"object\",\"type\":\"AuthUser\",\"relationName\":\"AuthUserTokens\"},{\"name\":\"issuedBy\",\"kind\":\"object\",\"type\":\"AuthUser\",\"relationName\":\"AuthIssuedTokens\"}],\"dbName\":null}},\"enums\":{},\"types\":{}}")
 
 async function decodeBase64AsWasm(wasmBase64: string): Promise<WebAssembly.Module> {
   const { Buffer } = await import('node:buffer')
@@ -58,8 +58,8 @@ export interface PrismaClientConstructor {
    * @example
    * ```
    * const prisma = new PrismaClient()
-   * // Fetch zero or more Users
-   * const users = await prisma.user.findMany()
+   * // Fetch zero or more AuthUsers
+   * const authUsers = await prisma.authUser.findMany()
    * ```
    * 
    * Read more in our [docs](https://pris.ly/d/client).
@@ -80,8 +80,8 @@ export interface PrismaClientConstructor {
  * @example
  * ```
  * const prisma = new PrismaClient()
- * // Fetch zero or more Users
- * const users = await prisma.user.findMany()
+ * // Fetch zero or more AuthUsers
+ * const authUsers = await prisma.authUser.findMany()
  * ```
  * 
  * Read more in our [docs](https://pris.ly/d/client).
@@ -174,7 +174,55 @@ export interface PrismaClient<
     extArgs: ExtArgs
   }>>
 
-    
+      /**
+   * `prisma.authUser`: Exposes CRUD operations for the **AuthUser** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AuthUsers
+    * const authUsers = await prisma.authUser.findMany()
+    * ```
+    */
+  get authUser(): Prisma.AuthUserDelegate<ExtArgs, { omit: OmitOpts }>;
+
+  /**
+   * `prisma.authPermissionGroup`: Exposes CRUD operations for the **AuthPermissionGroup** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AuthPermissionGroups
+    * const authPermissionGroups = await prisma.authPermissionGroup.findMany()
+    * ```
+    */
+  get authPermissionGroup(): Prisma.AuthPermissionGroupDelegate<ExtArgs, { omit: OmitOpts }>;
+
+  /**
+   * `prisma.authPermissionGroupAccess`: Exposes CRUD operations for the **AuthPermissionGroupAccess** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AuthPermissionGroupAccesses
+    * const authPermissionGroupAccesses = await prisma.authPermissionGroupAccess.findMany()
+    * ```
+    */
+  get authPermissionGroupAccess(): Prisma.AuthPermissionGroupAccessDelegate<ExtArgs, { omit: OmitOpts }>;
+
+  /**
+   * `prisma.authUserPermissionGroup`: Exposes CRUD operations for the **AuthUserPermissionGroup** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AuthUserPermissionGroups
+    * const authUserPermissionGroups = await prisma.authUserPermissionGroup.findMany()
+    * ```
+    */
+  get authUserPermissionGroup(): Prisma.AuthUserPermissionGroupDelegate<ExtArgs, { omit: OmitOpts }>;
+
+  /**
+   * `prisma.authOneTimeToken`: Exposes CRUD operations for the **AuthOneTimeToken** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AuthOneTimeTokens
+    * const authOneTimeTokens = await prisma.authOneTimeToken.findMany()
+    * ```
+    */
+  get authOneTimeToken(): Prisma.AuthOneTimeTokenDelegate<ExtArgs, { omit: OmitOpts }>;
 }
 
 export function getPrismaClientClass(): PrismaClientConstructor {

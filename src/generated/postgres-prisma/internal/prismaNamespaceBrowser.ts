@@ -51,7 +51,11 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
-
+  AuthUser: 'AuthUser',
+  AuthPermissionGroup: 'AuthPermissionGroup',
+  AuthPermissionGroupAccess: 'AuthPermissionGroupAccess',
+  AuthUserPermissionGroup: 'AuthUserPermissionGroup',
+  AuthOneTimeToken: 'AuthOneTimeToken'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -68,4 +72,90 @@ export const TransactionIsolationLevel = {
 } as const
 
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
+
+
+export const AuthUserScalarFieldEnum = {
+  id: 'id',
+  login: 'login',
+  fullName: 'fullName',
+  systemRole: 'systemRole',
+  isActive: 'isActive',
+  passwordHash: 'passwordHash',
+  passwordSalt: 'passwordSalt',
+  passwordSetAt: 'passwordSetAt',
+  mustSetPassword: 'mustSetPassword',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AuthUserScalarFieldEnum = (typeof AuthUserScalarFieldEnum)[keyof typeof AuthUserScalarFieldEnum]
+
+
+export const AuthPermissionGroupScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  slug: 'slug',
+  description: 'description',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AuthPermissionGroupScalarFieldEnum = (typeof AuthPermissionGroupScalarFieldEnum)[keyof typeof AuthPermissionGroupScalarFieldEnum]
+
+
+export const AuthPermissionGroupAccessScalarFieldEnum = {
+  groupId: 'groupId',
+  permissionKey: 'permissionKey',
+  createdAt: 'createdAt'
+} as const
+
+export type AuthPermissionGroupAccessScalarFieldEnum = (typeof AuthPermissionGroupAccessScalarFieldEnum)[keyof typeof AuthPermissionGroupAccessScalarFieldEnum]
+
+
+export const AuthUserPermissionGroupScalarFieldEnum = {
+  userId: 'userId',
+  groupId: 'groupId',
+  assignedAt: 'assignedAt'
+} as const
+
+export type AuthUserPermissionGroupScalarFieldEnum = (typeof AuthUserPermissionGroupScalarFieldEnum)[keyof typeof AuthUserPermissionGroupScalarFieldEnum]
+
+
+export const AuthOneTimeTokenScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  issuedById: 'issuedById',
+  tokenHash: 'tokenHash',
+  tokenPreview: 'tokenPreview',
+  expiresAt: 'expiresAt',
+  usedAt: 'usedAt',
+  revokedAt: 'revokedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type AuthOneTimeTokenScalarFieldEnum = (typeof AuthOneTimeTokenScalarFieldEnum)[keyof typeof AuthOneTimeTokenScalarFieldEnum]
+
+
+export const SortOrder = {
+  asc: 'asc',
+  desc: 'desc'
+} as const
+
+export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+} as const
+
+export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
+
+
+export const NullsOrder = {
+  first: 'first',
+  last: 'last'
+} as const
+
+export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
 

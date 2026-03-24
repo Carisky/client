@@ -37,7 +37,14 @@
         <div class="app-title">
           Raport SAD - TSL SILESIA <span id="app-version" class="app-version">—</span>
         </div>
-        <div id="meta" class="app-meta">Brak zaimportowanych danych</div>
+        <div class="app-header-side">
+          <div id="meta" class="app-meta">Brak zaimportowanych danych</div>
+          <div id="auth-summary" class="auth-summary">
+            <div id="auth-summary-text" class="auth-summary-text">Nie zalogowano</div>
+            <button id="btn-auth-open-admin" class="btn btn-outline-light btn-sm" type="button">Admin</button>
+            <button id="btn-auth-logout" class="btn btn-outline-light btn-sm hidden" type="button">Wyloguj</button>
+          </div>
+        </div>
       </header>
 
       <nav class="tabs nav nav-pills" role="tablist" aria-label="Nawigacja">
@@ -83,6 +90,13 @@
             <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
           </svg>
           Eksport
+        </button>
+        <button id="tab-btn-admin" class="tab nav-link" role="tab" aria-selected="false">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2l7 4v6c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-4Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+            <path d="M9.5 12.5l1.7 1.7 3.6-4.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          Admin
         </button>
         <button id="tab-btn-settings" class="tab nav-link" role="tab" aria-selected="false">
           <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -470,6 +484,234 @@
 
           <div id="export-preview" class="accordion-wrap" role="region" aria-label="Eksport (podgl&#261;d)"></div>
           <div id="export-status" class="status" aria-live="polite"></div>
+        </section>
+
+        <section id="tab-admin" class="tab-panel hidden">
+          <div class="admin-layout">
+            <div class="admin-top-grid">
+              <div class="card">
+                <div class="card-body">
+                  <div class="admin-card-head">
+                    <div>
+                      <h2 class="h5 mb-2">Sesja i dostep</h2>
+                      <p class="muted admin-muted">
+                        Bootstrap super admina, logowanie haslem lub tokenem i ustawienie nowego hasla po pierwszym wejsciu.
+                      </p>
+                    </div>
+                    <button id="btn-admin-session-refresh" class="btn btn-outline-light btn-sm" type="button">Odswiez</button>
+                  </div>
+
+                  <div id="admin-auth-status" class="status" aria-live="polite"></div>
+
+                  <div id="admin-issued-token-card" class="admin-token-card hidden">
+                    <div class="admin-token-head">
+                      <div>
+                        <div class="admin-token-title">Jednorazowy token</div>
+                        <div id="admin-issued-token-meta" class="muted admin-muted">Token widoczny jest tylko raz.</div>
+                      </div>
+                      <button id="btn-admin-copy-token" class="btn btn-primary btn-sm" type="button">Kopiuj token</button>
+                    </div>
+                    <div id="admin-issued-token-value" class="admin-token-value mono">-</div>
+                  </div>
+
+                  <div id="admin-bootstrap-card" class="admin-block hidden">
+                    <h3 class="admin-subtitle">Bootstrap pierwszego Super Admin</h3>
+                    <form id="admin-bootstrap-form" class="admin-form-grid">
+                      <label class="admin-field">
+                        <span>Login</span>
+                        <input id="admin-bootstrap-login" class="form-control form-control-sm" type="text" autocomplete="username" />
+                        <small id="admin-bootstrap-login-error" class="admin-field-error"></small>
+                      </label>
+                      <label class="admin-field">
+                        <span>Full Name</span>
+                        <input id="admin-bootstrap-full-name" class="form-control form-control-sm" type="text" autocomplete="name" />
+                        <small id="admin-bootstrap-full-name-error" class="admin-field-error"></small>
+                      </label>
+                      <div class="admin-form-actions">
+                        <button id="btn-admin-bootstrap-submit" class="btn btn-primary btn-sm" type="submit">Utworz super admina</button>
+                      </div>
+                    </form>
+                  </div>
+
+                  <div id="admin-login-card" class="admin-block hidden">
+                    <div class="admin-auth-grid">
+                      <div class="admin-auth-pane">
+                        <h3 class="admin-subtitle">Logowanie haslem</h3>
+                        <form id="admin-password-login-form" class="admin-form-grid">
+                          <label class="admin-field">
+                            <span>Login</span>
+                            <input id="admin-password-login-login" class="form-control form-control-sm" type="text" autocomplete="username" />
+                            <small id="admin-password-login-login-error" class="admin-field-error"></small>
+                          </label>
+                          <label class="admin-field">
+                            <span>Haslo</span>
+                            <input id="admin-password-login-password" class="form-control form-control-sm" type="password" autocomplete="current-password" />
+                            <small id="admin-password-login-password-error" class="admin-field-error"></small>
+                          </label>
+                          <div class="admin-form-actions">
+                            <button id="btn-admin-password-login-submit" class="btn btn-primary btn-sm" type="submit">Zaloguj haslem</button>
+                          </div>
+                        </form>
+                      </div>
+
+                      <div class="admin-auth-pane">
+                        <h3 class="admin-subtitle">Pierwsze logowanie tokenem</h3>
+                        <form id="admin-token-login-form" class="admin-form-grid">
+                          <label class="admin-field">
+                            <span>Login</span>
+                            <input id="admin-token-login-login" class="form-control form-control-sm" type="text" autocomplete="username" />
+                            <small id="admin-token-login-login-error" class="admin-field-error"></small>
+                          </label>
+                          <label class="admin-field">
+                            <span>Token</span>
+                            <input id="admin-token-login-token" class="form-control form-control-sm mono" type="text" autocomplete="one-time-code" />
+                            <small id="admin-token-login-token-error" class="admin-field-error"></small>
+                          </label>
+                          <div class="admin-form-actions">
+                            <button id="btn-admin-token-login-submit" class="btn btn-primary btn-sm" type="submit">Zaloguj tokenem</button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div id="admin-password-setup-card" class="admin-block hidden">
+                    <h3 class="admin-subtitle">Ustaw nowe haslo</h3>
+                    <p class="muted admin-muted">
+                      Po zalogowaniu tokenem ustawiasz nowe haslo. Token jest jednorazowy i po tym kroku traci waznosc.
+                    </p>
+                    <form id="admin-password-setup-form" class="admin-form-grid">
+                      <label class="admin-field">
+                        <span>Nowe haslo</span>
+                        <input id="admin-password-setup-password" class="form-control form-control-sm" type="password" autocomplete="new-password" />
+                        <small id="admin-password-setup-password-error" class="admin-field-error"></small>
+                      </label>
+                      <label class="admin-field">
+                        <span>Powtorz haslo</span>
+                        <input id="admin-password-setup-password-confirm" class="form-control form-control-sm" type="password" autocomplete="new-password" />
+                        <small id="admin-password-setup-password-confirm-error" class="admin-field-error"></small>
+                      </label>
+                      <div class="admin-form-actions">
+                        <button id="btn-admin-password-setup-submit" class="btn btn-primary btn-sm" type="submit">Zapisz haslo</button>
+                      </div>
+                    </form>
+                  </div>
+
+                  <div id="admin-session-card" class="admin-block hidden">
+                    <div class="admin-card-head">
+                      <div>
+                        <h3 class="admin-subtitle">Aktualna sesja</h3>
+                        <p id="admin-session-meta" class="muted admin-muted">-</p>
+                      </div>
+                      <button id="btn-admin-logout-inline" class="btn btn-outline-light btn-sm" type="button">Wyloguj</button>
+                    </div>
+                    <div id="admin-session-groups" class="pills"></div>
+                    <div id="admin-session-permissions" class="pills"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="admin-no-access-card" class="card hidden">
+                <div class="card-body">
+                  <h2 class="h5 mb-2">Panel administratora niedostepny</h2>
+                  <p class="muted admin-muted">
+                    To konto moze zalogowac sie do aplikacji, ale nie ma systemowej roli Admin lub Super Admin. Dostep do panelu zarzadzania uzytkownikami jest zablokowany.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div id="admin-panel-wrap" class="admin-panel-wrap hidden">
+              <div class="admin-management-grid">
+                <div class="card">
+                  <div class="card-body">
+                    <div class="admin-card-head">
+                      <div>
+                        <h2 class="h5 mb-2">Uzytkownicy</h2>
+                        <p class="muted admin-muted">
+                          Tworzenie kont, przypisanie grup dostepow i reset tokenow 24h.
+                        </p>
+                      </div>
+                      <button id="btn-admin-user-reset-form" class="btn btn-outline-light btn-sm" type="button">Nowy formularz</button>
+                    </div>
+
+                    <form id="admin-user-form" class="admin-form-grid">
+                      <input id="admin-user-id" type="hidden" />
+                      <label class="admin-field">
+                        <span>Login</span>
+                        <input id="admin-user-login" class="form-control form-control-sm" type="text" autocomplete="off" />
+                        <small id="admin-user-login-error" class="admin-field-error"></small>
+                      </label>
+                      <label class="admin-field">
+                        <span>Full Name</span>
+                        <input id="admin-user-full-name" class="form-control form-control-sm" type="text" autocomplete="off" />
+                        <small id="admin-user-full-name-error" class="admin-field-error"></small>
+                      </label>
+                      <label class="admin-field">
+                        <span>Rola systemowa</span>
+                        <select id="admin-user-system-role" class="form-select form-select-sm"></select>
+                        <small id="admin-user-system-role-error" class="admin-field-error"></small>
+                      </label>
+                      <label class="admin-field admin-checkbox-field">
+                        <span>Aktywne konto</span>
+                        <input id="admin-user-is-active" class="form-check-input" type="checkbox" checked />
+                      </label>
+                      <div class="admin-field admin-field-wide">
+                        <span>Grupy dostepow</span>
+                        <div id="admin-user-group-list" class="admin-checkbox-list"></div>
+                        <small id="admin-user-group-error" class="admin-field-error"></small>
+                      </div>
+                      <div class="admin-form-actions">
+                        <button id="btn-admin-user-save" class="btn btn-primary btn-sm" type="submit">Zapisz uzytkownika</button>
+                      </div>
+                    </form>
+
+                    <div id="admin-user-status" class="status" aria-live="polite"></div>
+                    <div id="admin-user-list" class="admin-list"></div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="card-body">
+                    <div class="admin-card-head">
+                      <div>
+                        <h2 class="h5 mb-2">Grupy i dostepy</h2>
+                        <p class="muted admin-muted">
+                          Dostepy sa zaszyte w kodzie, ale grupy i ich sklad przechowujemy w Postgres.
+                        </p>
+                      </div>
+                      <button id="btn-admin-group-reset-form" class="btn btn-outline-light btn-sm" type="button">Nowa grupa</button>
+                    </div>
+
+                    <form id="admin-group-form" class="admin-form-grid">
+                      <input id="admin-group-id" type="hidden" />
+                      <label class="admin-field">
+                        <span>Nazwa grupy</span>
+                        <input id="admin-group-name" class="form-control form-control-sm" type="text" autocomplete="off" />
+                        <small id="admin-group-name-error" class="admin-field-error"></small>
+                      </label>
+                      <label class="admin-field">
+                        <span>Opis</span>
+                        <input id="admin-group-description" class="form-control form-control-sm" type="text" autocomplete="off" />
+                        <small id="admin-group-description-error" class="admin-field-error"></small>
+                      </label>
+                      <div class="admin-field admin-field-wide">
+                        <span>Dostepy</span>
+                        <div id="admin-group-permission-list" class="admin-checkbox-list admin-permission-list"></div>
+                        <small id="admin-group-permissions-error" class="admin-field-error"></small>
+                      </div>
+                      <div class="admin-form-actions">
+                        <button id="btn-admin-group-save" class="btn btn-primary btn-sm" type="submit">Zapisz grupe</button>
+                      </div>
+                    </form>
+
+                    <div id="admin-group-status" class="status" aria-live="polite"></div>
+                    <div id="admin-group-list" class="admin-list"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section id="tab-settings" class="tab-panel hidden">

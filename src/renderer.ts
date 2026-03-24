@@ -1,5 +1,6 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./index.css";
+import { getCurrentAuthSession, hasAppPermission, initAdminUi } from "./adminPanel";
 import { RAPORT_COLUMNS } from "./raportColumns";
 
 type TabName =
@@ -9,6 +10,7 @@ type TabName =
   | "validation"
   | "attention"
   | "export"
+  | "admin"
   | "settings";
 
 const els = {
@@ -26,6 +28,7 @@ const els = {
     "tab-btn-attention",
   ) as HTMLButtonElement,
   tabExportBtn: document.getElementById("tab-btn-export") as HTMLButtonElement,
+  tabAdminBtn: document.getElementById("tab-btn-admin") as HTMLButtonElement,
   tabSettingsBtn: document.getElementById(
     "tab-btn-settings",
   ) as HTMLButtonElement,
@@ -36,6 +39,7 @@ const els = {
   tabValidation: document.getElementById("tab-validation") as HTMLElement,
   tabAttention: document.getElementById("tab-attention") as HTMLElement,
   tabExport: document.getElementById("tab-export") as HTMLElement,
+  tabAdmin: document.getElementById("tab-admin") as HTMLElement,
   tabSettings: document.getElementById("tab-settings") as HTMLElement,
 
   importBtn: document.getElementById("btn-import") as HTMLButtonElement,
@@ -53,6 +57,9 @@ const els = {
   meta: document.getElementById("meta") as HTMLElement,
   appVersion: document.getElementById("app-version") as HTMLElement,
   tabsLogo: document.getElementById("tabs-logo-img") as HTMLImageElement,
+  btnAuthOpenAdmin: document.getElementById(
+    "btn-auth-open-admin",
+  ) as HTMLButtonElement,
 
   updateNudge: document.getElementById("update-nudge") as HTMLElement,
   updateNudgeText: document.getElementById("update-nudge-text") as HTMLElement,
@@ -525,7 +532,61 @@ function errorMessage(e: unknown): string {
   }
 }
 
+function canAccessTab(name: TabName): boolean {
+  if (name === "admin") return true;
+  if (name === "import") return hasAppPermission("REPORT_IMPORT");
+  if (name === "preview") return hasAppPermission("REPORT_VIEW");
+  if (name === "dashboard") return hasAppPermission("REPORT_DUPLICATES_VIEW");
+  if (name === "validation") return hasAppPermission("VALIDATION_VIEW");
+  if (name === "attention") return hasAppPermission("ATTENTION_VIEW");
+  if (name === "export") return hasAppPermission("EXPORT_VIEW");
+  if (name === "settings") return hasAppPermission("SETTINGS_VIEW");
+  return false;
+}
+
+function setTabAvailability(
+  btn: HTMLButtonElement,
+  available: boolean,
+  keepVisible = false,
+) {
+  btn.disabled = !available;
+  btn.classList.toggle("hidden", !available && !keepVisible);
+}
+
+function syncTabAccess() {
+  setTabAvailability(els.tabImportBtn, canAccessTab("import"));
+  setTabAvailability(els.tabPreviewBtn, canAccessTab("preview"));
+  setTabAvailability(els.tabDashboardBtn, canAccessTab("dashboard"));
+  setTabAvailability(els.tabValidationBtn, canAccessTab("validation"));
+  setTabAvailability(els.tabAttentionBtn, canAccessTab("attention"));
+  setTabAvailability(els.tabExportBtn, canAccessTab("export"));
+  setTabAvailability(els.tabAdminBtn, true, true);
+  setTabAvailability(els.tabSettingsBtn, canAccessTab("settings"));
+}
+
+function getDefaultAccessibleTab(): TabName {
+  const orderedTabs: TabName[] = [
+    "import",
+    "preview",
+    "dashboard",
+    "validation",
+    "attention",
+    "export",
+    "settings",
+  ];
+  return orderedTabs.find((tab) => canAccessTab(tab)) ?? "admin";
+}
+
+function ensureAccessibleTab() {
+  if (canAccessTab(state.tab)) return;
+  setTab(getDefaultAccessibleTab());
+}
+
 function setTab(name: TabName) {
+  if (!canAccessTab(name)) {
+    name = "admin";
+  }
+
   state.tab = name;
 
   els.tabImportBtn.classList.toggle("active", name === "import");
@@ -534,6 +595,7 @@ function setTab(name: TabName) {
   els.tabValidationBtn.classList.toggle("active", name === "validation");
   els.tabAttentionBtn.classList.toggle("active", name === "attention");
   els.tabExportBtn.classList.toggle("active", name === "export");
+  els.tabAdminBtn.classList.toggle("active", name === "admin");
   els.tabSettingsBtn.classList.toggle("active", name === "settings");
 
   els.tabImportBtn.setAttribute("aria-selected", String(name === "import"));
@@ -551,6 +613,7 @@ function setTab(name: TabName) {
     String(name === "attention"),
   );
   els.tabExportBtn.setAttribute("aria-selected", String(name === "export"));
+  els.tabAdminBtn.setAttribute("aria-selected", String(name === "admin"));
   els.tabSettingsBtn.setAttribute("aria-selected", String(name === "settings"));
 
   els.tabImport.classList.toggle("hidden", name !== "import");
@@ -559,6 +622,7 @@ function setTab(name: TabName) {
   els.tabValidation.classList.toggle("hidden", name !== "validation");
   els.tabAttention.classList.toggle("hidden", name !== "attention");
   els.tabExport.classList.toggle("hidden", name !== "export");
+  els.tabAdmin.classList.toggle("hidden", name !== "admin");
   els.tabSettings.classList.toggle("hidden", name !== "settings");
 
   if (name === "preview") void refreshPreview();
@@ -720,6 +784,22 @@ function renderTable(page: {
 }
 
 async function refreshMeta() {
+  const authSession = getCurrentAuthSession();
+  if (!authSession) {
+    els.meta.textContent = "Sprawdzanie sesji...";
+    return;
+  }
+
+  if (authSession.bootstrapRequired) {
+    els.meta.textContent = "Najpierw utworz pierwszego super admina.";
+    return;
+  }
+
+  if (!authSession.isAuthenticated) {
+    els.meta.textContent = "Zaloguj sie, aby uzyskac dostep do danych.";
+    return;
+  }
+
   try {
     const meta = await window.api.getRaportMeta();
     if (!meta.importedAt || meta.rowCount === 0) {
@@ -3610,7 +3690,9 @@ els.tabDashboardBtn.addEventListener("click", () => setTab("dashboard"));
 els.tabValidationBtn.addEventListener("click", () => setTab("validation"));
 els.tabAttentionBtn.addEventListener("click", () => setTab("attention"));
 els.tabExportBtn.addEventListener("click", () => setTab("export"));
+els.tabAdminBtn.addEventListener("click", () => setTab("admin"));
 els.tabSettingsBtn.addEventListener("click", () => setTab("settings"));
+els.btnAuthOpenAdmin.addEventListener("click", () => setTab("admin"));
 
 els.importBtn.addEventListener("click", () => void importRaport());
 
@@ -4213,7 +4295,18 @@ if (!updateStatusUnsub) {
 
 setupCopyToClipboard();
 
-void refreshMeta();
+syncTabAccess();
+setTab("admin");
+void initAdminUi({
+  setBusy,
+  onSessionChanged: () => {
+    syncTabAccess();
+    ensureAccessibleTab();
+    void refreshMeta();
+  },
+}).catch((e: unknown) => {
+  els.meta.textContent = `Auth error: ${errorMessage(e)}`;
+});
 startUpdatesPolling();
 void refreshAppVersion();
 void refreshTabsLogo();

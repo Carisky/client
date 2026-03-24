@@ -8,4 +8,9 @@
  *
  * 🟢 You can import this file directly.
  */
+export type * from './models/AuthUser'
+export type * from './models/AuthPermissionGroup'
+export type * from './models/AuthPermissionGroupAccess'
+export type * from './models/AuthUserPermissionGroup'
+export type * from './models/AuthOneTimeToken'
 export type * from './commonInputTypes'

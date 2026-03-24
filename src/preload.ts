@@ -1,4 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type {
+  AdminPanelData,
+  AdminRotateUserTokenInput,
+  AdminUpsertPermissionGroupInput,
+  AdminUpsertUserInput,
+  AuthActionResult,
+  AuthSessionState,
+  BootstrapSuperAdminInput,
+  CompletePasswordSetupInput,
+  IssuedOneTimeToken,
+  PasswordLoginInput,
+  TokenLoginInput,
+} from './shared/authTypes';
 
 export type ImportResult = {
   rowCount: number;
@@ -223,6 +236,39 @@ export type UpdateStatus =
 export type UpdateStartResult = { ok: boolean; error?: string };
 
 contextBridge.exposeInMainWorld('api', {
+  getAuthSession: (): Promise<AuthSessionState> => ipcRenderer.invoke('auth:session'),
+  bootstrapSuperAdmin: (
+    input: BootstrapSuperAdminInput,
+  ): Promise<AuthActionResult<IssuedOneTimeToken>> =>
+    ipcRenderer.invoke('auth:bootstrap', input),
+  loginWithPassword: (
+    input: PasswordLoginInput,
+  ): Promise<AuthActionResult<AuthSessionState>> =>
+    ipcRenderer.invoke('auth:loginPassword', input),
+  loginWithToken: (
+    input: TokenLoginInput,
+  ): Promise<AuthActionResult<AuthSessionState>> =>
+    ipcRenderer.invoke('auth:loginToken', input),
+  completePasswordSetup: (
+    input: CompletePasswordSetupInput,
+  ): Promise<AuthActionResult<AuthSessionState>> =>
+    ipcRenderer.invoke('auth:completePasswordSetup', input),
+  logout: (): Promise<AuthSessionState> => ipcRenderer.invoke('auth:logout'),
+  getAdminPanelData: (): Promise<AuthActionResult<AdminPanelData>> =>
+    ipcRenderer.invoke('admin:panel'),
+  saveAdminUser: (
+    input: AdminUpsertUserInput,
+  ): Promise<AuthActionResult<{ userId: string; issuedToken?: IssuedOneTimeToken }>> =>
+    ipcRenderer.invoke('admin:saveUser', input),
+  rotateAdminUserToken: (
+    input: AdminRotateUserTokenInput,
+  ): Promise<AuthActionResult<IssuedOneTimeToken>> =>
+    ipcRenderer.invoke('admin:rotateUserToken', input),
+  savePermissionGroup: (
+    input: AdminUpsertPermissionGroupInput,
+  ): Promise<AuthActionResult<{ groupId: string }>> =>
+    ipcRenderer.invoke('admin:savePermissionGroup', input),
+
   onImportProgress: (handler: (p: ImportProgress) => void): (() => void) => {
     const listener = (_event: unknown, payload: ImportProgress) => handler(payload);
     ipcRenderer.on('raport:importProgress', listener);

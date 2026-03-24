@@ -26,10 +26,34 @@ import type {
   ValidationExportResult,
   ValidationExportPreviewResult,
 } from './preload';
+import type {
+  AdminPanelData,
+  AdminRotateUserTokenInput,
+  AdminUpsertPermissionGroupInput,
+  AdminUpsertUserInput,
+  AuthActionResult,
+  AuthSessionState,
+  BootstrapSuperAdminInput,
+  CompletePasswordSetupInput,
+  IssuedOneTimeToken,
+  PasswordLoginInput,
+  TokenLoginInput,
+} from './shared/authTypes';
 
 declare global {
   interface Window {
     api: {
+      getAuthSession: () => Promise<AuthSessionState>;
+      bootstrapSuperAdmin: (input: BootstrapSuperAdminInput) => Promise<AuthActionResult<IssuedOneTimeToken>>;
+      loginWithPassword: (input: PasswordLoginInput) => Promise<AuthActionResult<AuthSessionState>>;
+      loginWithToken: (input: TokenLoginInput) => Promise<AuthActionResult<AuthSessionState>>;
+      completePasswordSetup: (input: CompletePasswordSetupInput) => Promise<AuthActionResult<AuthSessionState>>;
+      logout: () => Promise<AuthSessionState>;
+      getAdminPanelData: () => Promise<AuthActionResult<AdminPanelData>>;
+      saveAdminUser: (input: AdminUpsertUserInput) => Promise<AuthActionResult<{ userId: string; issuedToken?: IssuedOneTimeToken }>>;
+      rotateAdminUserToken: (input: AdminRotateUserTokenInput) => Promise<AuthActionResult<IssuedOneTimeToken>>;
+      savePermissionGroup: (input: AdminUpsertPermissionGroupInput) => Promise<AuthActionResult<{ groupId: string }>>;
+
       onImportProgress: (handler: (p: ImportProgress) => void) => () => void;
       importRaport: () => Promise<ImportResult>;
       clearRaport: () => Promise<RaportMeta>;
