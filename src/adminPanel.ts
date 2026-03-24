@@ -1,6 +1,8 @@
 import {
   SYSTEM_ROLE_LABELS,
+  expandPermissionDependencies,
   type AppPermissionKey,
+  type AppPermissionDefinition,
   type ManageableSystemRoleKey,
 } from "./shared/authAccess";
 import type {
@@ -413,28 +415,111 @@ function renderGroupCheckboxes(selectedGroupIds: string[]) {
     .join("");
 }
 
+function getExpandedSelectedPermissionKeys(
+  selectedKeys: AppPermissionKey[],
+): Set<AppPermissionKey> {
+  return new Set(expandPermissionDependencies(selectedKeys));
+}
+
+function getPermissionParentKey(permission: AppPermissionDefinition): string {
+  return String(
+    "parentKey" in permission ? permission.parentKey ?? "" : "",
+  ).trim();
+}
+
+function syncPermissionHierarchyUi(changedInput?: HTMLInputElement | null) {
+  const inputs = Array.from(
+    els.adminGroupPermissionList.querySelectorAll<HTMLInputElement>(
+      'input[type="checkbox"][data-permission-key]',
+    ),
+  );
+  const inputByKey = new Map<string, HTMLInputElement>();
+  for (const input of inputs) {
+    const key = String(input.dataset.permissionKey ?? input.value ?? "").trim();
+    if (key) inputByKey.set(key, input);
+  }
+
+  if (changedInput?.checked) {
+    const parentKey = String(changedInput.dataset.parentKey ?? "").trim();
+    if (parentKey) {
+      const parentInput = inputByKey.get(parentKey);
+      if (parentInput) parentInput.checked = true;
+    }
+  }
+
+  for (const input of inputs) {
+    const parentKey = String(input.dataset.parentKey ?? "").trim();
+    if (!parentKey) continue;
+    const parentInput = inputByKey.get(parentKey);
+    const enabled = Boolean(parentInput?.checked);
+    if (!enabled) input.checked = false;
+    input.disabled = !enabled;
+    input
+      .closest(".admin-permission-subitem")
+      ?.classList.toggle("is-disabled", !enabled);
+  }
+}
+
 function renderPermissionCheckboxes(selectedKeys: AppPermissionKey[]) {
-  const selected = new Set(selectedKeys);
+  const selected = getExpandedSelectedPermissionKeys(selectedKeys);
   const permissions = adminPanelData?.permissionCatalog ?? [];
-  els.adminGroupPermissionList.innerHTML = permissions
-    .map(
-      (permission) => `
-        <label class="admin-checkbox-item">
-          <input type="checkbox" value="${escapeHtml(permission.key)}" ${
-            selected.has(permission.key) ? "checked" : ""
-          } />
-          <div class="admin-checkbox-item-main">
-            <div class="admin-checkbox-item-title">${escapeHtml(
-              permission.label,
-            )}</div>
-            <div class="admin-checkbox-item-sub">${escapeHtml(
-              `${permission.category} - ${permission.description}`,
-            )}</div>
-          </div>
-        </label>
-      `,
-    )
+  const roots: AppPermissionDefinition[] = [];
+  const childrenByParent = new Map<string, AppPermissionDefinition[]>();
+
+  for (const permission of permissions) {
+    const parentKey = getPermissionParentKey(permission);
+    if (!parentKey) {
+      roots.push(permission);
+      continue;
+    }
+
+    const list = childrenByParent.get(parentKey);
+    if (list) list.push(permission);
+    else childrenByParent.set(parentKey, [permission]);
+  }
+
+  const renderPermissionInput = (
+    permission: AppPermissionDefinition,
+    isChild = false,
+  ): string => {
+    const parentKey = getPermissionParentKey(permission);
+    const description = isChild
+      ? `Podpunkt: ${permission.description}`
+      : `${permission.category} - ${permission.description}`;
+    return `
+      <label class="${isChild ? "admin-permission-subitem" : "admin-permission-entry-row"}">
+        <input type="checkbox" value="${escapeHtml(permission.key)}" data-permission-key="${escapeHtml(permission.key)}" ${
+          parentKey ? `data-parent-key="${escapeHtml(parentKey)}"` : ""
+        } ${selected.has(permission.key) ? "checked" : ""} />
+        <div class="admin-checkbox-item-main">
+          <div class="admin-checkbox-item-title">${escapeHtml(
+            permission.label,
+          )}</div>
+          <div class="admin-checkbox-item-sub">${escapeHtml(
+            description,
+          )}</div>
+        </div>
+      </label>
+    `;
+  };
+
+  els.adminGroupPermissionList.innerHTML = roots
+    .map((permission) => {
+      const children = childrenByParent.get(permission.key) ?? [];
+      const childrenHtml = children.length
+        ? `<div class="admin-permission-children">${children
+            .map((child) => renderPermissionInput(child, true))
+            .join("")}</div>`
+        : "";
+      return `
+        <div class="admin-permission-entry">
+          ${renderPermissionInput(permission)}
+          ${childrenHtml}
+        </div>
+      `;
+    })
     .join("");
+  syncPermissionHierarchyUi();
 }
 
 function resetUserForm() {
@@ -1022,6 +1107,13 @@ function bindEvents() {
   });
   els.adminGroupForm.addEventListener("submit", (event) => {
     void handleGroupSave(event);
+  });
+  els.adminGroupPermissionList.addEventListener("change", (event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target || target.tagName !== "INPUT" || target.type !== "checkbox") {
+      return;
+    }
+    syncPermissionHierarchyUi(target);
   });
 
   els.btnAdminUserResetForm.addEventListener("click", () => resetUserForm());

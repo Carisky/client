@@ -8,6 +8,7 @@ import { getPostgresPrisma } from "./postgresDb";
 import {
   APP_PERMISSION_CATALOG,
   APP_PERMISSION_KEYS,
+  expandPermissionDependencies,
   getBasePermissionsForSystemRole,
   isAppPermissionKey,
   isManageableSystemRoleKey,
@@ -204,7 +205,9 @@ function buildEffectivePermissions(params: {
     if (isAppPermissionKey(key)) set.add(key);
   }
 
-  return APP_PERMISSION_KEYS.filter((key) => set.has(key));
+  return expandPermissionDependencies(
+    APP_PERMISSION_KEYS.filter((key) => set.has(key)),
+  );
 }
 
 async function superAdminExists(): Promise<boolean> {
@@ -549,7 +552,9 @@ function validatePermissionGroupInput(input: AdminUpsertPermissionGroupInput): {
   return {
     name,
     description: description ? description.slice(0, 255) : null,
-    permissionKeys: permissionKeys.filter(isAppPermissionKey),
+    permissionKeys: expandPermissionDependencies(
+      permissionKeys.filter(isAppPermissionKey),
+    ),
   };
 }
 

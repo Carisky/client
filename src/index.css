@@ -1667,6 +1667,46 @@ details.row-accordion > summary::-webkit-details-marker {
   margin-top: 2px;
 }
 
+.admin-permission-entry {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 12px;
+  background: rgba(var(--panel-2-rgb), 0.26);
+}
+
+.admin-permission-entry-row,
+.admin-permission-subitem {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.admin-permission-entry-row {
+  padding: 8px 10px;
+}
+
+.admin-permission-entry-row input,
+.admin-permission-subitem input {
+  margin-top: 2px;
+}
+
+.admin-permission-children {
+  display: grid;
+  gap: 8px;
+  margin: 0 10px 10px 34px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
+}
+
+.admin-permission-subitem {
+  padding-top: 2px;
+}
+
+.admin-permission-subitem.is-disabled {
+  opacity: 0.58;
+}
+
 .admin-checkbox-item-main {
   min-width: 0;
 }
@@ -1675,6 +1715,11 @@ details.row-accordion > summary::-webkit-details-marker {
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
+}
+
+.admin-permission-subitem .admin-checkbox-item-title::before {
+  content: "◦ ";
+  color: var(--muted);
 }
 
 .admin-checkbox-item-sub {

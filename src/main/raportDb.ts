@@ -1661,7 +1661,12 @@ function computeDiscrepancyPct(value: number, limit: number): number | null {
   return Number.isFinite(pct) ? pct : null;
 }
 
-export async function getValidationOutlierErrors(params: { month: string; mrn?: string | null; grouping?: unknown }): Promise<{
+export async function getValidationOutlierErrors(params: {
+  month: string;
+  mrn?: string | null;
+  grouping?: unknown;
+  visibleAgentNames?: unknown[] | null;
+}): Promise<{
   range: { start: string; end: string };
   availableAgents: string[];
   items: ValidationOutlierError[];
@@ -1672,6 +1677,12 @@ export async function getValidationOutlierErrors(params: { month: string; mrn?: 
   const anchor = range.start;
   const rows = await queryValidationRepresentativeRows(client, range);
   const manual = await getValidationManualSet(client);
+  const visibleAgentKeys = new Set(
+    (Array.isArray(params.visibleAgentNames) ? params.visibleAgentNames : [])
+      .map((value) => normalizeAgentKey(value))
+      .filter(Boolean),
+  );
+  const restrictVisibleAgents = visibleAgentKeys.size > 0;
 
   const availableAgentMap = new Map<string, string>();
   for (const r of rows) {
@@ -1681,9 +1692,14 @@ export async function getValidationOutlierErrors(params: { month: string; mrn?: 
     if (!k || availableAgentMap.has(k)) continue;
     availableAgentMap.set(k, v);
   }
-  const availableAgents = Array.from(availableAgentMap.values()).sort((a, b) =>
+  let availableAgents = Array.from(availableAgentMap.values()).sort((a, b) =>
     a.localeCompare(b),
   );
+  if (restrictVisibleAgents) {
+    availableAgents = availableAgents.filter((agent) =>
+      visibleAgentKeys.has(normalizeAgentKey(agent)),
+    );
+  }
 
   const computed: Array<
     ValidationComputedItem & {
@@ -1783,6 +1799,12 @@ export async function getValidationOutlierErrors(params: { month: string; mrn?: 
     if (!it.bucketStart) continue;
     if (!it.outlierSide) continue;
     if (it.coef == null || !Number.isFinite(it.coef)) continue;
+    if (
+      restrictVisibleAgents &&
+      !visibleAgentKeys.has(normalizeAgentKey(it.agent_celny))
+    ) {
+      continue;
+    }
 
     const k = `${JSON.stringify(it.key)}|${it.bucketStart}`;
     const b = bounds.get(k);

@@ -262,6 +262,19 @@ export function registerRaportIpc(): void {
     await assertFeatureAccess('VALIDATION_VIEW');
     return getValidationOutlierErrors({ month: args?.month, mrn: args?.mrn, grouping: args?.grouping as never });
   });
+  ipcMain.handle('attention:outlierErrors', async (_evt, args: { month: string; mrn?: string; grouping?: unknown }) => {
+    await assertFeatureAccess('ATTENTION_VIEW');
+    const session = await getAuthSessionState();
+    const visibleAgentNames = session.user?.effectivePermissions.includes('ATTENTION_VIEW_ALL')
+      ? null
+      : [session.user?.fullName ?? ''];
+    return getValidationOutlierErrors({
+      month: args?.month,
+      mrn: args?.mrn,
+      grouping: args?.grouping as never,
+      visibleAgentNames,
+    });
+  });
   ipcMain.handle('validation:setManualVerified', async (_evt, args: { rowId: number; verified: boolean }) => {
     await assertFeatureAccess('VALIDATION_VERIFY_MANUAL');
     return setValidationManualVerified({ rowId: args?.rowId, verified: Boolean(args?.verified) });

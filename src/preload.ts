@@ -305,6 +305,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('validation:dayItems', { month, date, filter, mrn, grouping: options?.grouping }),
   getValidationOutlierErrors: (month: string, mrn?: string, options?: ValidationGroupingOptions): Promise<ValidationOutlierErrors> =>
     ipcRenderer.invoke('validation:outlierErrors', { month, mrn, grouping: options?.grouping }),
+  getAttentionOutlierErrors: (month: string, mrn?: string, options?: ValidationGroupingOptions): Promise<ValidationOutlierErrors> =>
+    ipcRenderer.invoke('attention:outlierErrors', { month, mrn, grouping: options?.grouping }),
   setValidationManualVerified: (rowId: number, verified: boolean): Promise<{ ok: true }> =>
     ipcRenderer.invoke('validation:setManualVerified', { rowId, verified }),
   exportValidationXlsx: (

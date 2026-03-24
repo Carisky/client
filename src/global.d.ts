@@ -79,6 +79,7 @@ declare global {
       getValidationDashboard: (month: string, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationDashboard>;
       getValidationDayItems: (month: string, date: string, filter: ValidationDayFilter, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationDayItems>;
       getValidationOutlierErrors: (month: string, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationOutlierErrors>;
+      getAttentionOutlierErrors: (month: string, mrn?: string, options?: ValidationGroupingOptions) => Promise<ValidationOutlierErrors>;
       setValidationManualVerified: (rowId: number, verified: boolean) => Promise<{ ok: true }>;
       exportValidationXlsx: (
         period: string,

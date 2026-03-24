@@ -10,6 +10,14 @@ export const SYSTEM_ROLE_LABELS: Record<SystemRoleKey, string> = {
   USER: "User",
 };
 
+type AppPermissionDefinitionShape = {
+  key: string;
+  label: string;
+  description: string;
+  category: string;
+  parentKey?: string;
+};
+
 export const APP_PERMISSION_CATALOG = [
   {
     key: "REPORT_IMPORT",
@@ -48,6 +56,14 @@ export const APP_PERMISSION_CATALOG = [
     category: "Walidacja",
   },
   {
+    key: "ATTENTION_VIEW_ALL",
+    label: "Widok wszystkich agentow",
+    description:
+      "W zakladce Do mojej uwagi pozwala filtrowac i przegladac wpisy wszystkich agentow.",
+    category: "Walidacja",
+    parentKey: "ATTENTION_VIEW",
+  },
+  {
     key: "EXPORT_VIEW",
     label: "Eksport wynikow",
     description: "Podglad i eksport wynikow do Excel.",
@@ -59,7 +75,7 @@ export const APP_PERMISSION_CATALOG = [
     description: "Podglad ustawien lokalnych i zasobow aplikacji.",
     category: "Aplikacja",
   },
-] as const;
+] as const satisfies readonly AppPermissionDefinitionShape[];
 
 export type AppPermissionDefinition = (typeof APP_PERMISSION_CATALOG)[number];
 export type AppPermissionKey = AppPermissionDefinition["key"];
@@ -69,9 +85,40 @@ export const APP_PERMISSION_KEYS: AppPermissionKey[] = APP_PERMISSION_CATALOG.ma
 );
 
 const APP_PERMISSION_KEY_SET = new Set<string>(APP_PERMISSION_KEYS);
+const APP_PERMISSION_MAP = new Map<string, AppPermissionDefinition>(
+  APP_PERMISSION_CATALOG.map((permission) => [permission.key, permission]),
+);
 
 export function isAppPermissionKey(value: unknown): value is AppPermissionKey {
   return APP_PERMISSION_KEY_SET.has(String(value ?? "").trim());
+}
+
+export function getAppPermissionDefinition(
+  key: unknown,
+): AppPermissionDefinition | null {
+  const normalizedKey = String(key ?? "").trim();
+  return APP_PERMISSION_MAP.get(normalizedKey) ?? null;
+}
+
+export function expandPermissionDependencies(
+  permissionKeys: readonly AppPermissionKey[],
+): AppPermissionKey[] {
+  const expanded = new Set<AppPermissionKey>(permissionKeys);
+  const queue = [...expanded];
+
+  while (queue.length > 0) {
+    const key = queue.pop();
+    if (!key) continue;
+    const definition = getAppPermissionDefinition(key);
+    const parentKey =
+      definition && "parentKey" in definition ? definition.parentKey : undefined;
+    if (!parentKey || !isAppPermissionKey(parentKey)) continue;
+    if (expanded.has(parentKey)) continue;
+    expanded.add(parentKey);
+    queue.push(parentKey);
+  }
+
+  return APP_PERMISSION_KEYS.filter((key) => expanded.has(key));
 }
 
 export function getBasePermissionsForSystemRole(

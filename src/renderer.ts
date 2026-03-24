@@ -1739,7 +1739,7 @@ type ExportFilters = {
 };
 
 function normalizeAgentKey(value: unknown): string {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function normalizeAttentionClientName(value: unknown): string {
@@ -1943,7 +1943,26 @@ function persistAttentionClientSelection(): void {
   }
 }
 
+function getLockedAttentionAgentKey(): string | null {
+  if (hasAppPermission("ATTENTION_VIEW_ALL")) return null;
+  const fullName = String(getCurrentAuthSession()?.user?.fullName ?? "").trim();
+  const key = normalizeAgentKey(fullName);
+  return key || null;
+}
+
+function getLockedAttentionAgentLabel(): string | null {
+  return getLockedAttentionAgentKey();
+}
+
+function getAttentionAgentSelectionKeys(): Set<string> {
+  const lockedKey = getLockedAttentionAgentKey();
+  if (lockedKey) return new Set([lockedKey]);
+  return attentionAgentSelectedKeys;
+}
+
 function getSelectedAttentionAgents(): string[] {
+  const lockedLabel = getLockedAttentionAgentLabel();
+  if (lockedLabel) return [lockedLabel];
   if (!attentionAgentSelectedKeys.size || !attentionAgentOptions.length) return [];
   const map = new Map(attentionAgentOptions.map((o) => [o.key, o.name] as const));
   const out: string[] = [];
@@ -1970,12 +1989,14 @@ function getSelectedAttentionClients(): string[] {
 function renderAttentionActiveFilters(): void {
   const selected = getSelectedAttentionAgents();
   const selectedClients = getSelectedAttentionClients();
+  const attentionAgentLocked = Boolean(getLockedAttentionAgentKey());
   const clientMode = getAttentionClientMode();
   const clientModeLabel =
     clientMode === "blacklist" ? "black-list" : "white-list";
   const chips: ActiveFilterChip[] = [];
 
   for (const name of selected) {
+    if (attentionAgentLocked) continue;
     chips.push({
       text: `Agent: ${name}`,
       ariaRemove: `Usun filtr Agent: ${name}`,
@@ -2039,8 +2060,10 @@ function renderAttentionActiveFilters(): void {
   }
 
   renderActiveFilterChips(els.attentionActiveFilters, chips, () => {
-    attentionAgentSelectedKeys.clear();
-    persistAttentionAgentSelection();
+    if (!attentionAgentLocked) {
+      attentionAgentSelectedKeys.clear();
+      persistAttentionAgentSelection();
+    }
     attentionClientSelectedKeys.clear();
     persistAttentionClientSelection();
     setAttentionClientMode("whitelist");
@@ -2059,7 +2082,17 @@ function renderAttentionActiveFilters(): void {
 
 function updateAttentionAgentUi(): void {
   const selected = getSelectedAttentionAgents();
-  els.btnAttentionAgentClear.disabled = selected.length === 0;
+  const lockedLabel = getLockedAttentionAgentLabel();
+  const attentionAgentLocked = Boolean(lockedLabel);
+  els.btnAttentionAgentClear.disabled =
+    attentionAgentLocked || selected.length === 0;
+
+  if (attentionAgentLocked && lockedLabel) {
+    els.attentionAgentBtn.textContent = `Agent celny: ${lockedLabel}`;
+    els.attentionAgentBtn.disabled = true;
+    renderAttentionActiveFilters();
+    return;
+  }
 
   if (!attentionAgentOptions.length) {
     els.attentionAgentBtn.textContent = "Agent celny: ładowanie…";
@@ -2081,6 +2114,7 @@ function updateAttentionAgentUi(): void {
 
 function renderAttentionAgentList(): void {
   const q = String(els.attentionAgentSearch.value ?? "").trim().toLowerCase();
+  const selectedKeys = getAttentionAgentSelectionKeys();
   const items = q
     ? attentionAgentOptions.filter((o) => o.name.toLowerCase().includes(q))
     : attentionAgentOptions;
@@ -2100,7 +2134,7 @@ function renderAttentionAgentList(): void {
     input.type = "checkbox";
     input.className = "form-check-input";
     input.dataset.key = o.key;
-    input.checked = attentionAgentSelectedKeys.has(o.key);
+    input.checked = selectedKeys.has(o.key);
 
     const span = document.createElement("span");
     span.textContent = o.name;
@@ -2251,9 +2285,14 @@ function setAvailableAttentionAgents(agents: unknown): void {
     if (!key || map.has(key)) continue;
     map.set(key, name);
   }
-  attentionAgentOptions = Array.from(map.entries())
+  let options = Array.from(map.entries())
     .map(([key, name]) => ({ key, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const lockedKey = getLockedAttentionAgentKey();
+  if (lockedKey) {
+    options = options.filter((option) => option.key === lockedKey);
+  }
+  attentionAgentOptions = options;
 
   const availableKeys = new Set(attentionAgentOptions.map((o) => o.key));
   attentionAgentSelectedKeys = new Set(
@@ -3427,7 +3466,7 @@ async function refreshAttention() {
   setBusy(true);
 
   try {
-    const outliers = await window.api.getValidationOutlierErrors(
+    const outliers = await window.api.getAttentionOutlierErrors(
       period,
       undefined,
       getAttentionGroupingOptions(),
@@ -3440,7 +3479,7 @@ async function refreshAttention() {
       (outliers.items ?? []).map((it) => normalizeAttentionClientName(it.odbiorca)),
     );
 
-    const selectedKeys = attentionAgentSelectedKeys;
+    const selectedKeys = getAttentionAgentSelectionKeys();
     const byAgent =
       selectedKeys.size === 0
         ? (outliers.items ?? [])
@@ -4007,6 +4046,7 @@ els.attentionAgentSearch.addEventListener("input", () =>
   renderAttentionAgentList(),
 );
 els.btnAttentionAgentClear.addEventListener("click", () => {
+  if (getLockedAttentionAgentKey()) return;
   attentionAgentSelectedKeys.clear();
   persistAttentionAgentSelection();
   updateAttentionAgentUi();
@@ -4014,6 +4054,7 @@ els.btnAttentionAgentClear.addEventListener("click", () => {
   scheduleAttentionRefresh();
 });
 els.attentionAgentList.addEventListener("change", (e) => {
+  if (getLockedAttentionAgentKey()) return;
   const target = e.target as HTMLInputElement | null;
   if (!target || target.tagName !== "INPUT" || target.type !== "checkbox") return;
   const key = String(target.dataset.key ?? "").trim();
@@ -4315,6 +4356,9 @@ void initAdminUi({
   onSessionChanged: () => {
     syncTabAccess();
     ensureAccessibleTab();
+    updateAttentionAgentUi();
+    renderAttentionAgentList();
+    if (state.tab === "attention") void refreshAttention();
     void refreshMeta();
   },
   openAdminPanel: () => {
